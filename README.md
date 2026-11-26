@@ -1,5 +1,12 @@
 # Lichtfabriek
 
+```
+.-------..___  
+  '-._     :_.-' 
+      ) _ (      
+     '-' '-'     
+```
+
 Lichtfabriek drives the 3 RGB cubes (1 m³ / 1000 liter each) and the analog
 LED sign at Stadsfabriek makerspace in Alkmaar. Two services in one monorepo:
 
