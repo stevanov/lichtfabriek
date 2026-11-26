@@ -1,6 +1,6 @@
 <svg width="100%" viewBox="0 0 380 530" role="img" xmlns="http://www.w3.org/2000/svg">
 <title>Stads Fabriek LED stack</title>
-<desc>Three stacked IBC containers with a wooden frame, a sign, and a black LED board on top where a hammer pivots from its handle end on the right, swings its head down to the left onto an anvil, sparks, then jumps back up.</desc>
+<desc>Three stacked IBC containers with a metal frame, a sign, and a black LED board on top where a hammer pivots from its handle end on the right, swings its head down to the left onto an anvil, sparks, then jumps back up.</desc>
 <defs>
 <pattern id="grid" width="18" height="18" patternUnits="userSpaceOnUse"><path d="M18 0H0V18" fill="none" stroke="#555" stroke-width="0.6"/></pattern>
 <style>
@@ -33,9 +33,9 @@
 <rect x="30" y="396" width="180" height="100" fill="url(#grid)"/>
 <rect x="95" y="202" width="100" height="30" fill="#111"/>
 <text x="145" y="217" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#eee">STADS FABRIEK</text>
-<rect x="20" y="392" width="200" height="8" fill="#5a3a22"/>
-<rect x="20" y="392" width="8" height="104" fill="#5a3a22"/>
-<rect x="212" y="392" width="8" height="104" fill="#5a3a22"/>
+<rect x="20" y="392" width="200" height="8" fill="#6a6f77"/>
+<rect x="20" y="392" width="8" height="104" fill="#6a6f77"/>
+<rect x="212" y="392" width="8" height="104" fill="#6a6f77"/>
 <line x1="202" y1="100" x2="226" y2="100" stroke="#888" stroke-width="0.5" stroke-dasharray="3 3"/>
 <text x="232" y="100" dominant-baseline="central" font-size="12">LED board</text>
 <line x1="198" y1="217" x2="226" y2="217" stroke="#888" stroke-width="0.5" stroke-dasharray="3 3"/>
@@ -44,5 +44,5 @@
 <text x="232" y="288" dominant-baseline="central" font-size="12">3 IBC tanks</text>
 <text x="232" y="306" dominant-baseline="central" font-size="12">RGB LEDs inside</text>
 <line x1="222" y1="396" x2="226" y2="396" stroke="#888" stroke-width="0.5" stroke-dasharray="3 3"/>
-<text x="232" y="396" dominant-baseline="central" font-size="12">Wooden frame</text>
+<text x="232" y="396" dominant-baseline="central" font-size="12">Metal frame</text>
 </svg>
