@@ -2,6 +2,19 @@
 
 Topics and message shapes (SPEC §I). Validation is strict on both kubusd and
 console (V2). Safety caps (V14) enforced here so both sides share the rules.
+
+alpha2: a pattern is a SEQUENCE of steps (SPEC §C, V21/V22):
+
+    {pattern_id, pattern_hash,
+     steps: [
+       {duration_s: float, cubes: {0: {primitive, params} | null,
+                                   1: {primitive, params} | null,
+                                   2: {primitive, params} | null}},
+       ...
+     ]}
+
+Legacy single-primitive messages (pre-alpha2) are still accepted and
+normalized to a one-step sequence (V22).
 """
 
 from __future__ import annotations
@@ -23,11 +36,17 @@ ALL_TOPICS = {
 # Safety caps (V14)
 MAX_STROBE_HZ = 3.0
 MAX_BRIGHTNESS = 1.0
-MAX_MESSAGE_BYTES = 4096
+MAX_MESSAGE_BYTES = 8192  # sequences grow the payload (alpha2)
 MAX_COLORS = 64
 MAX_COLOR_CHANNELS = 3
 MIN_SPEED = 0.01
 MAX_SPEED = 20.0
+
+# Sequence bounds (alpha2, V14)
+MAX_STEPS = 20
+MIN_STEP_DURATION = 0.5
+MAX_TOTAL_DURATION = 600.0  # seconds = 10 min
+LEGACY_STEP_DURATION = 60.0  # legacy single-primitive -> one step loops
 
 # Pattern primitives (SPEC §C animation model). 'sign' is NOT user-selectable:
 # the sign runs its own fixed hammer animation (SPEC §C, scheduler.py).
@@ -38,11 +57,23 @@ PRIMITIVES = {
     "chase",
     "holiday",
     "off",
+    # alpha2 additions
+    "random",
+    "fire",
+    "sparkle",
+    "huesweep",
+    "sine",
+    "strobe",
+    "police",
+    "knight",
+    "static",
 }
 
 _ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 MAX_META_LEN = 128
+
+NUM_CUBES = 3
 
 
 def _check_meta(meta: dict) -> None:
@@ -53,12 +84,8 @@ def _check_meta(meta: dict) -> None:
             raise ValueError(f"meta.{key} too long")
 
 
-def validate_pattern(msg: dict) -> None:
-    """Validate a pattern/set message. Raises ValueError with a reason."""
-    primitive = msg.get("primitive")
-    if primitive not in PRIMITIVES:
-        raise ValueError(f"unknown primitive {primitive!r}")
-    params = msg.get("params")
+def validate_params(params: dict) -> None:
+    """Validate primitive params + safety caps (V14). Raises ValueError."""
     if not isinstance(params, dict):
         raise ValueError("params must be an object")
     speed = params.get("speed", 1.0)
@@ -66,7 +93,6 @@ def validate_pattern(msg: dict) -> None:
         raise ValueError("params.speed must be a number")
     if not (MIN_SPEED <= speed <= MAX_SPEED):
         raise ValueError(f"params.speed out of range [{MIN_SPEED},{MAX_SPEED}]")
-    # strobe cap: speed is 1/period in our primitives -> keep < 3 Hz (V14)
     colors = params.get("colors")
     if colors is not None:
         if not isinstance(colors, list) or not colors:
@@ -84,12 +110,95 @@ def validate_pattern(msg: dict) -> None:
         raise ValueError("params.brightness must be a number")
     if not (0 <= brightness <= MAX_BRIGHTNESS):
         raise ValueError("params.brightness out of range")
+
+
+def _validate_cube_spec(cube_spec, cube_idx: int) -> None:
+    """Validate one cube entry: null (persist) or {primitive, params}."""
+    if cube_spec is None:
+        return  # persist previous step (V21)
+    if not isinstance(cube_spec, dict):
+        raise ValueError(f"cubes.{cube_idx} must be an object or null")
+    primitive = cube_spec.get("primitive")
+    if primitive not in PRIMITIVES:
+        raise ValueError(f"cubes.{cube_idx}.primitive unknown {primitive!r}")
+    validate_params(cube_spec.get("params", {}))
+
+
+def _validate_step(step: dict, idx: int) -> None:
+    if not isinstance(step, dict):
+        raise ValueError(f"steps[{idx}] must be an object")
+    duration = step.get("duration_s")
+    if not isinstance(duration, (int, float)) or isinstance(duration, bool):
+        raise ValueError(f"steps[{idx}].duration_s must be a number")
+    if not (MIN_STEP_DURATION <= duration):
+        raise ValueError(
+            f"steps[{idx}].duration_s too short (min {MIN_STEP_DURATION}s)")
+    cubes = step.get("cubes")
+    if not isinstance(cubes, dict):
+        raise ValueError(f"steps[{idx}].cubes must be an object")
+    keys = set(cubes.keys())
+    if not keys:
+        raise ValueError(f"steps[{idx}].cubes is empty")
+    for k in keys:
+        if k not in ("0", "1", "2"):
+            raise ValueError(f"steps[{idx}].cubes key {k!r} invalid (0-2)")
+    for ci in range(NUM_CUBES):
+        if str(ci) in cubes:
+            _validate_cube_spec(cubes[str(ci)], ci)
+
+
+def normalize_pattern(msg: dict) -> dict:
+    """Return the canonical steps form of a pattern message (V22).
+
+    Accepts both legacy `{primitive, params}` and alpha2 `{steps: [...]}`.
+    Raises ValueError on invalid input.
+    """
     pattern_id = msg.get("pattern_id")
     if not isinstance(pattern_id, str) or not _ID_RE.match(pattern_id):
         raise ValueError("pattern_id invalid")
     pattern_hash = msg.get("pattern_hash")
     if not isinstance(pattern_hash, str) or not _ID_RE.match(pattern_hash):
         raise ValueError("pattern_hash invalid")
+
+    if "steps" in msg:
+        steps = msg["steps"]
+        if not isinstance(steps, list) or not steps:
+            raise ValueError("steps must be a non-empty list")
+        if len(steps) > MAX_STEPS:
+            raise ValueError(f"steps too many ({len(steps)} > {MAX_STEPS})")
+        total = 0.0
+        for i, step in enumerate(steps):
+            _validate_step(step, i)
+            total += step["duration_s"]
+        if total > MAX_TOTAL_DURATION:
+            raise ValueError(
+                f"total sequence too long ({total:.1f}s > {MAX_TOTAL_DURATION}s)")
+        return {
+            "pattern_id": pattern_id,
+            "pattern_hash": pattern_hash,
+            "steps": steps,
+        }
+
+    # legacy single-primitive form (V22)
+    primitive = msg.get("primitive")
+    if primitive not in PRIMITIVES:
+        raise ValueError(f"unknown primitive {primitive!r}")
+    params = msg.get("params", {})
+    validate_params(params)
+    cube_spec = {"primitive": primitive, "params": params}
+    return {
+        "pattern_id": pattern_id,
+        "pattern_hash": pattern_hash,
+        "steps": [{
+            "duration_s": LEGACY_STEP_DURATION,
+            "cubes": {"0": cube_spec, "1": cube_spec, "2": cube_spec},
+        }],
+    }
+
+
+def validate_pattern(msg: dict) -> None:
+    """Validate a pattern/set message (either form). Raises ValueError."""
+    normalize_pattern(msg)  # raises on any problem
     _check_meta(msg.get("meta") or {})
 
 

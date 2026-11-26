@@ -162,6 +162,8 @@ def new_pattern():
 
 
 def _publish(request) -> redirect:
+    import json
+
     ip = _client_ip()
     # rate limit publish endpoint (V7)
     minute_start = time.time() - 60
@@ -170,28 +172,39 @@ def _publish(request) -> redirect:
         return redirect(url_for("patterns"))
     title = request.form.get("title", "").strip()
     description = request.form.get("description", "").strip()
-    primitive = request.form.get("primitive", "").strip()
-    speed = _float(request.form.get("speed", "1"))
-    brightness = _float(request.form.get("brightness", "1"))
-    colors = _colors(request.form.get("colors", ""))
     pattern_id = secrets.token_hex(8)
-    params = {"speed": speed, "brightness": brightness}
-    if colors:
-        params["colors"] = colors
-    msg = {
-        "pattern_id": pattern_id,
-        "pattern_hash": secrets.token_hex(8),
-        "primitive": primitive,
-        "params": params,
-    }
+    # alpha2: steps JSON comes from the sequence editor; legacy single-field
+    # form still supported (converted server-side)
+    raw_steps = request.form.get("steps", "").strip()
+    if raw_steps:
+        try:
+            steps = json.loads(raw_steps)
+        except ValueError:
+            flash("Invalid steps JSON.", "error")
+            return redirect(url_for("new_pattern"))
+        msg = {"pattern_id": pattern_id,
+               "pattern_hash": secrets.token_hex(8),
+               "steps": steps}
+    else:
+        primitive = request.form.get("primitive", "").strip()
+        speed = _float(request.form.get("speed", "1"))
+        brightness = _float(request.form.get("brightness", "1"))
+        colors = _colors(request.form.get("colors", ""))
+        params = {"speed": speed, "brightness": brightness}
+        if colors:
+            params["colors"] = colors
+        msg = {"pattern_id": pattern_id,
+               "pattern_hash": secrets.token_hex(8),
+               "primitive": primitive, "params": params}
     try:
         schema.validate_pattern(msg)
     except ValueError as e:
         flash(f"Invalid pattern: {e}", "error")
         return redirect(url_for("new_pattern"))
+    normalized = schema.normalize_pattern(msg)
     # V19: IP + creator stay in console DB, never in the payload
-    db.add_pattern(pattern_id, msg["pattern_hash"], title or pattern_id,
-                   description, session["user"], ip, primitive, params)
+    db.add_pattern(pattern_id, normalized["pattern_hash"], title or pattern_id,
+                   description, session["user"], ip, normalized["steps"])
     try:
         counter = publisher.publish_pattern(msg)
     except (ConnectionError, Exception) as e:  # noqa: BLE001
@@ -199,7 +212,8 @@ def _publish(request) -> redirect:
         flash(f"MQTT publish failed: {e}", "error")
         return redirect(url_for("patterns"))
     db.set_active(pattern_id)
-    db.audit(session["user"], "publish", f"{pattern_id} -> {primitive}", ip)
+    nsteps = len(normalized["steps"])
+    db.audit(session["user"], "publish", f"{pattern_id} -> {nsteps} step(s)", ip)
     flash(f"Pattern {title or pattern_id} published (counter {counter}).", "ok")
     return redirect(url_for("patterns"))
 
@@ -215,8 +229,7 @@ def activate(pattern_id: str):
     msg = {
         "pattern_id": p["pattern_id"],
         "pattern_hash": p["pattern_hash"] or secrets.token_hex(8),
-        "primitive": p["primitive"],
-        "params": p["params"],
+        "steps": p["steps"],
     }
     try:
         publisher.publish_pattern(msg)

@@ -8,11 +8,11 @@
   </div>
   {% if patterns %}
   <table>
-    <tr><th>Title</th><th>Primitive</th><th>Creator</th><th>Created</th><th>Status</th><th></th></tr>
+    <tr><th>Title</th><th>Steps</th><th>Creator</th><th>Created</th><th>Status</th><th></th></tr>
     {% for p in patterns %}
     <tr>
       <td>{{ p.title }}</td>
-      <td>{{ p.primitive }}</td>
+      <td>{{ p.steps | length }}{% if p.steps | length == 1 %} ({{ p.steps[0]['cubes'].get('0', {}).get('primitive', '—') if p.steps[0]['cubes'].get('0') else '—' }}){% endif %}</td>
       <td>{{ p.creator }}</td>
       <td class="muted">{{ p.created_ts | int | ctime }}</td>
       <td>{% if p.active %}<strong>active</strong>{% else %}—{% endif %}</td>

@@ -57,8 +57,7 @@ class DB:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 pattern_id TEXT NOT NULL,
                 pattern_hash TEXT NOT NULL,
-                primitive TEXT NOT NULL,
-                params TEXT NOT NULL,
+                steps TEXT NOT NULL,
                 created_ts REAL NOT NULL,
                 ttl REAL,
                 active INTEGER NOT NULL DEFAULT 0
@@ -82,7 +81,7 @@ class DB:
 
     def get_active_pattern(self) -> dict | None:
         row = self.conn.execute(
-            "SELECT pattern_id, pattern_hash, primitive, params, created_ts, ttl "
+            "SELECT pattern_id, pattern_hash, steps, created_ts, ttl "
             "FROM patterns WHERE active=1 ORDER BY id DESC LIMIT 1"
         ).fetchone()
         if not row:
@@ -92,24 +91,26 @@ class DB:
         return {
             "pattern_id": row[0],
             "pattern_hash": row[1],
-            "primitive": row[2],
-            "params": json.loads(row[3]),
-            "created_ts": row[4],
-            "ttl": row[5],
+            "steps": json.loads(row[2]),
+            "created_ts": row[3],
+            "ttl": row[4],
         }
 
     def set_active_pattern(self, msg: dict, ttl: float | None = None) -> None:
         import json
 
+        from shared.schema import normalize_pattern
+
+        normalized = normalize_pattern(msg)
         self.conn.execute(
             "UPDATE patterns SET active=0 WHERE active=1"
         )
         self.conn.execute(
-            "INSERT INTO patterns (pattern_id, pattern_hash, primitive, params, "
-            "created_ts, ttl, active) VALUES (?,?,?,?,?,?,1)",
+            "INSERT INTO patterns (pattern_id, pattern_hash, steps, "
+            "created_ts, ttl, active) VALUES (?,?,?,?,?,1)",
             (
-                msg["pattern_id"], msg["pattern_hash"], msg["primitive"],
-                json.dumps(msg["params"]), time.time(), ttl,
+                normalized["pattern_id"], normalized["pattern_hash"],
+                json.dumps(normalized["steps"]), time.time(), ttl,
             ),
         )
         self.conn.commit()

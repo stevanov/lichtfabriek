@@ -74,3 +74,69 @@ def test_control():
 def test_dispatch_unknown_topic():
     with pytest.raises(ValueError):
         schema.validate_for_topic("lichtfabriek/bogus", {})
+
+
+# ---- alpha2: sequences + legacy conversion (V21, V22, V14) ----
+
+def _steps_msg(steps):
+    return {"pattern_id": "p1", "pattern_hash": "h1", "steps": steps}
+
+
+def test_legacy_pattern_normalized():
+    msg = {"pattern_id": "p", "pattern_hash": "h",
+           "primitive": "rainbow", "params": {"speed": 1.0}}
+    norm = schema.normalize_pattern(msg)
+    assert len(norm["steps"]) == 1
+    step = norm["steps"][0]
+    assert set(step["cubes"]) == {"0", "1", "2"}
+    assert step["cubes"]["0"]["primitive"] == "rainbow"
+
+
+def test_steps_roundtrip():
+    msg = _steps_msg([
+        {"duration_s": 2.0, "cubes": {"0": {"primitive": "fire", "params": {}}}},
+    ])
+    norm = schema.normalize_pattern(msg)
+    assert norm["steps"][0]["cubes"]["0"]["primitive"] == "fire"
+
+
+def test_too_many_steps_rejected():
+    steps = [{"duration_s": 1.0, "cubes": {"0": {"primitive": "off", "params": {}}}}] * 21
+    with pytest.raises(ValueError, match="too many"):
+        schema.normalize_pattern(_steps_msg(steps))
+
+
+def test_step_too_short_rejected():
+    msg = _steps_msg([{"duration_s": 0.1, "cubes": {"0": {"primitive": "off", "params": {}}}}])
+    with pytest.raises(ValueError, match="too short"):
+        schema.normalize_pattern(msg)
+
+
+def test_total_duration_rejected():
+    steps = [{"duration_s": 300.0, "cubes": {"0": {"primitive": "off", "params": {}}}},
+             {"duration_s": 301.0, "cubes": {"0": {"primitive": "off", "params": {}}}}]
+    with pytest.raises(ValueError, match="total sequence"):
+        schema.normalize_pattern(_steps_msg(steps))
+
+
+def test_bad_cube_key_rejected():
+    msg = _steps_msg([{"duration_s": 2.0, "cubes": {"9": {"primitive": "off", "params": {}}}}])
+    with pytest.raises(ValueError, match="cubes key"):
+        schema.normalize_pattern(msg)
+
+
+def test_null_cube_persist_allowed():
+    msg = _steps_msg([{"duration_s": 2.0, "cubes": {"0": {"primitive": "static", "params": {}}}}])
+    norm = schema.normalize_pattern(msg)
+    assert norm["steps"][0]["cubes"].get("1") is None
+
+
+def test_empty_step_cubes_rejected():
+    msg = _steps_msg([{"duration_s": 2.0, "cubes": {}}])
+    with pytest.raises(ValueError, match="empty"):
+        schema.normalize_pattern(msg)
+
+
+def test_new_primitives_in_set():
+    assert {"random", "fire", "sparkle", "huesweep", "sine",
+            "strobe", "police", "knight", "static"} <= schema.PRIMITIVES

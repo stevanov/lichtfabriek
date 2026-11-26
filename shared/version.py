@@ -3,7 +3,7 @@
 Version format: v<year>.<month>_<minor>.<bugfix> with an optional pre-release
 suffix: -(alpha|beta|rc)<n>.
 
-  release:     v26.11_0.0            regex ^v\d{2}\.\d{2}_\d+\.\d+$
+  release:     v26.11_0.0            regex: vDD.DD_D+.D+ (digits)
   pre-release: v26.11_0.0-alpha1     v26.11_0.0-beta2   v26.11_0.0-rc1
 
 Ladder per Steven 2026-11-26: iterate alphas -> betas -> rcs -> final
