@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>Lichtfabriek</title>
+  <desc>Anvil on a dark LED-board background, with a spark — the Stadsfabriek sign.</desc>
+  <rect width="64" height="64" rx="12" fill="#111"/>
+  <!-- anvil (same geometry as docs/sign-layout.svg, scaled to 64px) -->
+  <g stroke="#cfe8f5" stroke-width="2.2" fill="none" stroke-linejoin="round">
+    <path d="M11 22 L53 22 L53 26 L43 28.5 L46.5 36 L52 36 L52 39 L12 39 L12 36 L17.5 36 L21 28.5 L11 26 Z"/>
+  </g>
+  <!-- spark lines, warm amber -->
+  <g stroke="#ffd98a" stroke-width="2" stroke-linecap="round">
+    <line x1="28" y1="18.5" x2="24" y2="13.5"/>
+    <line x1="33" y1="17.5" x2="33.5" y2="11"/>
+    <line x1="38" y1="18.5" x2="42" y2="13.5"/>
+  </g>
+</svg>

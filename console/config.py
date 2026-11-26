@@ -48,6 +48,7 @@ class Config:
         if self.secret_key in ("", "dev-insecure-change-me", "change-me"):
             raise ValueError(
                 "SECRET_KEY must be set to a real random value (not a placeholder)")
-        if self.admin_password in ("", "admin", "change-me"):
+        if self.admin_password in ("", "admin", "change-me",
+                                   "change-me-on-first-deploy"):
             raise ValueError(
                 "ADMIN_PASSWORD must be set to a real value (not a placeholder)")

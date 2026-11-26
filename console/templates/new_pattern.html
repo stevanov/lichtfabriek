@@ -1,52 +1,105 @@
 {% extends "base.html" %}
 {% block title %}New pattern — Lichtfabriek{% endblock %}
 {% block content %}
-<div class="panel" style="max-width:760px;">
+<div class="panel" style="max-width:960px;">
   <h1>New pattern</h1>
   <p class="muted">A pattern is a sequence of steps. Each step runs for its
   duration, and each cube can use its own primitive. Cubes you don't set keep
   their previous step's look (first step = off). Publishing activates it on
   the cubes immediately.</p>
 
-  <div id="viz" class="viz" style="margin:16px 0;">
-    <div class="viz-cubes">
-      <div class="cube" id="cube0">cube 1</div>
-      <div class="cube" id="cube1">cube 2</div>
-      <div class="cube" id="cube2">cube 3</div>
+  <div class="editor-layout">
+    <div class="editor-col">
+      <form method="post" id="pattern-form">
+        <label>Title</label>
+        <input name="title" placeholder="e.g. Sinterklaas 2026" required>
+        <label>Description</label>
+        <textarea name="description" rows="2" placeholder="What it looks like, when to use it"></textarea>
+        <input type="hidden" name="steps" id="steps-field" value="">
+
+        <div id="steps-editor"></div>
+        <button type="button" class="secondary" id="add-step">+ Add step</button>
+
+        <div style="margin-top:16px;">
+          <button type="submit" id="publish-btn">Publish</button>
+          <span class="muted" id="seq-status"></span>
+        </div>
+      </form>
     </div>
-    <div class="viz-sign">
-      <span class="sign-lamp" id="sign-anvil" title="anvil">▲</span>
-      <span class="sign-lamp" id="sign-s1">■</span>
-      <span class="sign-lamp" id="sign-s2">■</span>
-      <span class="sign-lamp" id="sign-s3">■</span>
-      <span class="sign-lamp" id="sign-spark">✦</span>
-      <span class="muted">sign</span>
+
+    <div class="rig-col">
+      <div class="viz-board" title="LED sign board (SPEC §C)">
+        <svg class="hammer-svg" viewBox="30 5 200 205" role="img" aria-hidden="true">
+          <rect x="40" y="20" width="160" height="170" fill="#111"/>
+          <path d="M70 128 L190 128 L190 140 L155 146 L165 172 L185 172 L185 182 L85 182 L85 172 L105 172 L115 146 L90 140 Z"
+                fill="none" stroke="#cfe8f5" stroke-width="1.5" stroke-linejoin="round"/>
+          <g id="hammer-g">
+            <line x1="170" y1="118" x2="170" y2="66" stroke="#cfe8f5" stroke-width="1.5"/>
+            <rect x="156" y="50" width="28" height="18" fill="none" stroke="#cfe8f5" stroke-width="1.5"/>
+          </g>
+          <g id="spark-g" style="opacity:0" stroke="#ffd98a" stroke-width="1.5" stroke-linecap="round">
+            <line x1="100" y1="112" x2="88" y2="98"/>
+            <line x1="106" y1="110" x2="102" y2="92"/>
+            <line x1="94" y1="114" x2="80" y2="106"/>
+          </g>
+        </svg>
+      </div>
+      <div class="viz-sign">
+        <span class="sign-lamp" id="sign-anvil" title="anvil — always on">▲</span>
+        <span class="sign-lamp" id="sign-s1" title="hammer raised">1</span>
+        <span class="sign-lamp" id="sign-s2" title="hammer mid-swing">2</span>
+        <span class="sign-lamp" id="sign-s3" title="hammer impact">3</span>
+        <span class="sign-lamp" id="sign-spark" title="sparks">✦</span>
+        <span class="muted">sign</span>
+      </div>
+      <div class="viz-cubes">
+        <div class="cube" id="cube0">cube 1</div>
+        <div class="cube" id="cube1">cube 2</div>
+        <div class="cube" id="cube2">cube 3</div>
+      </div>
     </div>
   </div>
+</div>
 
-  <form method="post" id="pattern-form">
-    <label>Title</label>
-    <input name="title" placeholder="e.g. Sinterklaas 2026" required>
-    <label>Description</label>
-    <textarea name="description" rows="2" placeholder="What it looks like, when to use it"></textarea>
-    <input type="hidden" name="steps" id="steps-field" value="">
-
-    <div id="steps-editor"></div>
-    <button type="button" class="secondary" id="add-step">+ Add step</button>
-
-    <div style="margin-top:16px;">
-      <button type="submit" id="publish-btn">Publish</button>
-      <span class="muted" id="seq-status"></span>
-    </div>
-  </form>
+<div class="panel" style="max-width:960px; margin-top:16px;">
+  <h2>Primitive reference</h2>
+  <p class="muted">What each primitive does, and which controls apply.</p>
+  <table class="prim-table">
+    <tr><th>primitive</th><th>what it does</th><th>color</th><th>brightness</th><th>speed</th></tr>
+    <tr><td><strong>static</strong></td><td>A single fixed color, stays on.</td><td class="y">yes</td><td class="y">yes</td><td class="n">—</td></tr>
+    <tr><td><strong>rainbow</strong></td><td>Continuously cycles through all hues (the classic rainbow).</td><td class="n">—</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>pulse</strong></td><td>Breathing effect: steps through colors, each gently pulsing in intensity.</td><td class="n">built-in</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>fade</strong></td><td>Smoothly fades from one color to the next and back.</td><td class="n">built-in</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>chase</strong></td><td>Flashing chase effect (blinks on a single cube; sweeps in a sequence).</td><td class="y">yes</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>holiday</strong></td><td>Warm festive glow that gently breathes (reddish-gold).</td><td class="n">built-in</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>random</strong></td><td>Jumps to a new random color at a steady rate.</td><td class="n">—</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>fire</strong></td><td>Flickering orange-red like a real flame.</td><td class="n">—</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>sparkle</strong></td><td>Mostly dark, with brief flashes in random colors (twinkle).</td><td class="n">random</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>huesweep</strong></td><td>Slow, smooth sweep through the color wheel.</td><td class="n">—</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>sine</strong></td><td>Smooth oscillation between two colors (red ↔ blue by default).</td><td class="n">built-in</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>strobe</strong></td><td>Hard on/off strobe of your chosen color (capped below 3&nbsp;Hz).</td><td class="y">yes</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>police</strong></td><td>Alternating red ↔ blue, like an emergency light.</td><td class="n">built-in</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>knight</strong></td><td>Knight-Rider style scanning light (blinks on one cube; with per-cube offsets it sweeps across the stack).</td><td class="y">yes</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>off</strong></td><td>Turns the cube off (black).</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+  </table>
+  <p class="muted">• <strong>color</strong>: your chosen color (single-color primitives).
+  • <strong>brightness</strong> 0–1, <strong>speed</strong> 1&nbsp;=&nbsp;normal, 2&nbsp;=&nbsp;twice as fast, 0.5&nbsp;=&nbsp;half speed.
+  • <strong>offset</strong>: phase shift as a fraction of one animation cycle — 0&nbsp;=&nbsp;in sync; 0.5&nbsp;=&nbsp;half a cycle out of phase; stagger cubes (0 / 0.33 / 0.66) to make knight/chase/rainbow sweep across the stack.
+  • <strong>built-in</strong> = the primitive uses its own fixed palette.</p>
 </div>
 
 <script>
 const PRIMITIVES = {{ primitives | tojson }};
 
 // ---- small color / time helpers (mirror kubusd/engine.py, V23) ----
-function strobe(t, speed) {
-  const period = Math.max(1 / 3.0, speed); // < 3 Hz cap (V14)
+// `speed` is a uniform MULTIPLIER for every primitive: 1.0 = normal pace,
+// 2.0 = twice as fast, 0.5 = half speed (SPEC §C). Base rates/periods are
+// per-primitive constants, exactly as in engine.py.
+const MAX_STROBE_HZ_JS = 1 / 3.0;
+function rate(speed, base) { return base * Math.max(speed, 0.01); }
+function periodOf(base, speed) { return Math.max(MAX_STROBE_HZ_JS, base / Math.max(speed, 0.01)); }
+function strobeBase(t, base, speed) {
+  const period = periodOf(base, speed); // < 3 Hz cap (V14)
   return (t % period) / period;
 }
 function hsv(h, s, v) {
@@ -59,67 +112,87 @@ function bright(c, b) { return c.map(x => Math.min(1, Math.max(0, x * b))); }
 function c01(c) { return [c[0]/255, c[1]/255, c[2]/255]; }
 
 // ---- primitives: (t, params) -> [r,g,b] 0..1  (mirror of engine.py) ----
+// `speed` is a uniform multiplier; `offset` is a FRACTION of one animation
+// cycle (0..1) — 0.5 = half a cycle out of phase with another cube.
+const shift = (t, p, cycle) => t + (p.offset??0) * cycle;
 const PRIMS = {
-  rainbow: (t,p) => { const [r,g,b]=hsv(t*(p.speed??0.5),1,1); return bright([r,g,b], p.brightness??1); },
-  huesweep: (t,p) => { const [r,g,b]=hsv(t*(p.speed??0.2),1,1); return bright([r,g,b], p.brightness??1); },
+  rainbow: (t,p) => { const c=1/rate(p.speed??1,0.5); const [r,g,b]=hsv(shift(t,p,c)*rate(p.speed??1,0.5)%1,1,1); return bright([r,g,b], p.brightness??1); },
+  huesweep: (t,p) => { const c=1/rate(p.speed??1,0.2); const [r,g,b]=hsv(shift(t,p,c)*rate(p.speed??1,0.2)%1,1,1); return bright([r,g,b], p.brightness??1); },
   pulse: (t,p) => {
     const cols = p.colors||[[255,0,0],[0,255,0],[0,0,255]];
-    const col = cols[Math.floor(t/Math.max(p.speed??1,0.01)) % cols.length];
-    const ph = strobe(t, p.speed??1), amp = 0.5+0.5*Math.sin(ph*2*Math.PI);
+    const per = periodOf(1.0, p.speed??1);
+    const ts = shift(t,p, cols.length*per);  // offset: full palette cycle
+    const col = cols[Math.floor(ts/Math.max(per,0.01)) % cols.length];
+    const ph = strobeBase(ts, 1.0, p.speed??1), amp = 0.5+0.5*Math.sin(ph*2*Math.PI);
     return bright(c01(col).map(x=>x*amp), p.brightness??1);
   },
   fade: (t,p) => {
     const cols = p.colors||[[255,0,0],[0,255,0],[0,0,255]];
-    const n=cols.length, ph=strobe(t,p.speed??0.5);
+    const cyc = 0.5/Math.max(p.speed??1,0.01);   // smooth blend: no clamp
+    const ts = shift(t,p,cyc), ph=(ts%cyc)/cyc;
+    const n=cols.length;
     const i=Math.floor(ph*n)%n, j=(i+1)%n, f=(ph*n)-i;
     const a=c01(cols[i]), b=c01(cols[j]);
     return bright([a[0]*(1-f)+b[0]*f, a[1]*(1-f)+b[1]*f, a[2]*(1-f)+b[2]*f], p.brightness??1);
   },
   chase: (t,p) => {
-    const on = Math.floor(strobe(t,p.speed??0.8)*4)%2===0;
+    const cyc = periodOf(0.8,p.speed??1);
+    const on = strobeBase(shift(t,p,cyc),0.8,p.speed??1)<0.5;  // 1 blink/period (V14)
     const c = c01((p.colors||[[255,255,255]])[0]);
     return bright(c.map(x=>on?x:0), p.brightness??1);
   },
   holiday: (t,p) => {
-    const ph = strobe(t*0.5, p.speed??1), warm=0.5+0.5*Math.sin(ph*2*Math.PI);
+    const cyc = 2*periodOf(1.0, p.speed??1);
+    const ph = strobeBase(shift(t,p,cyc)*0.5, 1.0, p.speed??1), warm=0.5+0.5*Math.sin(ph*2*Math.PI);
     return bright([warm, warm*0.9, warm*0.4], p.brightness??1);
   },
   random: (t,p) => {
-    const seed = Math.floor(t/Math.max(p.speed??0.5,0.01));
+    const cyc = 0.5/Math.max(p.speed??1,0.01);   // no strobe clamp (color jumps)
+    const ts = t + ((p.offset??0)%1)*cyc;
+    const seed = Math.floor(ts/Math.max(cyc,0.01));
     let x = (seed*9301+49297)%233280;
     const r=()=>{ x=(x*9301+49297)%233280; return x/233280; };
     return bright([r(),r(),r()], p.brightness??1);
   },
   fire: (t,p) => {
-    const seed = Math.floor(t/Math.max(p.speed??0.3,0.01)*10);
+    const cyc = 0.3/Math.max(p.speed??1,0.01);   // smooth flicker: no clamp
+    const ts = t + ((p.offset??0)%1)*cyc;
+    const seed = Math.floor(ts/Math.max(cyc,0.01)*10);
     let x=(seed*9301+49297)%233280; const r=()=>{x=(x*9301+49297)%233280;return x/233280;};
     const f=0.6+0.4*r();
     return bright([f, f*0.35, f*0.05], p.brightness??1);
   },
   sparkle: (t,p) => {
-    const seed = Math.floor(t/Math.max(p.speed??0.7,0.01));
+    const cyc = periodOf(0.7, p.speed??1);   // flash-like: strobe-capped
+    const ts = t + ((p.offset??0)%1)*cyc;
+    const seed = Math.floor(ts/Math.max(cyc,0.01));
     let x=(seed*9301+49297)%233280; const r=()=>{x=(x*9301+49297)%233280;return x/233280;};
-    const c = c01((p.colors||[[255,255,255]])[0]);
-    return bright(c.map(v=>r()<0.2?v:0), p.brightness??1);
+    const pal = (p.colors && p.colors.length>=2) ? p.colors
+      : [[255,255,255],[255,0,0],[0,0,255],[255,255,0],[0,255,0]];
+    const on = r()<0.2;
+    const c = c01(pal[Math.floor(r()*pal.length)%pal.length]);
+    return bright(c.map(v=>on?v:0), p.brightness??1);
   },
   sine: (t,p) => {
     const cols=p.colors||[[255,0,0],[0,0,255]];
-    const m=0.5+0.5*Math.sin(t*(p.speed??0.4)*2*Math.PI);
+    const c=1/rate(p.speed??1,0.4);
+    const m=0.5+0.5*Math.sin(shift(t,p,c)*rate(p.speed??1,0.4)*2*Math.PI);
     const a=c01(cols[0]), b=c01(cols[1]);
     return bright([a[0]*(1-m)+b[0]*m, a[1]*(1-m)+b[1]*m, a[2]*(1-m)+b[2]*m], p.brightness??1);
   },
   strobe: (t,p) => {
-    const on = strobe(t,p.speed??1)<0.5;
+    const cyc = periodOf(1.0, p.speed??1);
+    const on = strobeBase(shift(t,p,cyc), 1.0, p.speed??1)<0.5;
     const c = c01((p.colors||[[255,255,255]])[0]);
     return bright(c.map(x=>on?x:0), p.brightness??1);
   },
   police: (t,p) => {
     const cols=p.colors||[[255,0,0],[0,0,255]];
-    const c = cols[Math.floor(strobe(t,p.speed??0.6)*2)%cols.length];
+    const c = cols[Math.floor(strobeBase(shift(t,p,periodOf(0.6,p.speed??1)),0.6,p.speed??1)*2)%cols.length];
     return bright(c01(c), p.brightness??1);
   },
   knight: (t,p) => {
-    const on = strobe(t,p.speed??0.8)<0.25;
+    const on = strobeBase(shift(t,p,periodOf(0.8,p.speed??1)),0.8,p.speed??1)<0.25;
     const c = c01((p.colors||[[255,255,255]])[0]);
     return bright(c.map(x=>on?x:0), p.brightness??1);
   },
@@ -130,20 +203,50 @@ const PRIMS = {
 // ---- step model in the editor ----
 let steps = [{ duration_s: 5, cubes: {0:{primitive:'rainbow',params:{}},1:null,2:null} }];
 
+// primitives that use exactly ONE color -> the color picker is meaningful.
+// multi-color (sparkle/pulse/fade/sine/police) and hue-based/fixed (rainbow,
+// holiday, random, fire, huesweep, off) primitives ignore a single
+// `colors[0]` or would break on it, so the picker stays disabled for them
+// (engine defaults apply).
+const ONE_COLOR = new Set(['static', 'strobe', 'chase', 'knight']);
+
 function cubeInputs(idx) {
   const cube = steps[idx];
   let rows = '';
   for (let ci=0; ci<3; ci++) {
     const spec = cube.cubes[ci];
+    const bright = spec && spec.params.brightness != null ? spec.params.brightness : 1;
+    const speed = spec && spec.params.speed != null ? spec.params.speed : 1;
+    const offset = spec && spec.params.offset != null ? spec.params.offset : 0;
+    const color = spec && spec.params.colors && spec.params.colors[0]
+      ? spec.params.colors[0] : [255, 255, 255];
+    const hex = '#' + color.slice(0,3).map(v => Math.round(v).toString(16).padStart(2,'0')).join('');
+    const useColor = spec && ONE_COLOR.has(spec.primitive);
+    const dis = spec ? '' : 'disabled';  // (keep) rows have nothing to tune
     rows += `<div class="cube-row" data-cube="${ci}">
-      <label class="cube-label">cube ${ci+1}</label>
+      <span class="cube-label">cube ${ci+1}</span>
       <select onchange="onPrim(${idx},${ci},this)">
         <option value="">(keep)</option>
         ${PRIMITIVES.map(p=>`<option value="${p}" ${spec&&spec.primitive===p?'selected':''}>${p}</option>`).join('')}
       </select>
-      <input type="number" step="0.1" min="0" max="1" value="${spec?spec.params.brightness??1:1}"
-             placeholder="bright" title="brightness 0-1" style="width:80px"
-             oninput="onBright(${idx},${ci},this)">
+      <span class="color-wrap" title="${useColor ? 'color (single-color primitive)' : 'color picker only for single-color primitives (static, strobe, chase, knight)'}">
+        <input type="color" value="${hex}" ${useColor ? '' : 'disabled'} oninput="onColor(${idx},${ci},this)">
+      </span>
+      <span class="slider-wrap" title="brightness: 0 = off, 1 = full">
+        <input type="range" min="0" max="1" step="0.05" value="${bright}" ${dis}
+               oninput="onBright(${idx},${ci},this)">
+        <output class="slider-val">${bright}</output>
+      </span>
+      <span class="slider-wrap" title="speed: 0.1 = slow, 3 = fast">
+        <input type="range" min="0.1" max="3" step="0.1" value="${speed}" ${dis}
+               oninput="onSpeed(${idx},${ci},this)">
+        <output class="slider-val">${speed}</output>
+      </span>
+      <span class="slider-wrap" title="offset: phase shift as a fraction of one animation cycle (0 = in sync; 0.5 = half a cycle out of phase; stagger cubes e.g. 0 / 0.33 / 0.66 for a sweep)">
+        <input type="range" min="0" max="1" step="0.01" value="${offset}" ${dis}
+               oninput="onOffset(${idx},${ci},this)">
+        <output class="slider-val">${offset}</output>
+      </span>
     </div>`;
   }
   return rows;
@@ -160,6 +263,14 @@ function renderEditor() {
                oninput="onDur(${i},this)">
         <button type="button" class="secondary" onclick="rmStep(${i})">×</button>
       </div>
+      <div class="cube-head">
+        <span class="cube-label">cube</span>
+        <span>primitive</span>
+        <span class="color-wrap">color</span>
+        <span class="slider-wrap">brightness</span>
+        <span class="slider-wrap">speed</span>
+        <span class="slider-wrap">offset</span>
+      </div>
       ${cubeInputs(i)}
     </div>`).join('');
 }
@@ -174,11 +285,42 @@ function stepsJson() {
 
 function onPrim(i, ci, sel) {
   if (!sel.value) { steps[i].cubes[ci] = null; }
-  else { steps[i].cubes[ci] = { primitive: sel.value, params: {} }; }
+  else {
+    const prev = steps[i].cubes[ci] && steps[i].cubes[ci].params || {};
+    // keep the cube's existing speed/brightness/offset when switching primitive
+    const params = { brightness: 1.0, speed: 1.0, offset: 0.0, ...prev };
+    if (!ONE_COLOR.has(sel.value)) {
+      // multi-color / hue-based primitives use their own color sets
+      delete params.colors;
+    }
+    steps[i].cubes[ci] = { primitive: sel.value, params };
+  }
+  renderEditor();  // refresh sliders/color to the new primitive's defaults
+}
+function onColor(i, ci, inp) {
+  const spec = steps[i].cubes[ci];
+  if (!spec) return;
+  const h = inp.value.slice(1);
+  const rgb = [0, 2, 4].map(k => parseInt(h.slice(k, k+2), 16));
+  spec.params.colors = [rgb];
 }
 function onBright(i, ci, inp) {
   const spec = steps[i].cubes[ci];
   if (spec) spec.params.brightness = +inp.value;
+  const out = inp.closest('.slider-wrap').querySelector('.slider-val');
+  if (out) out.textContent = inp.value;
+}
+function onSpeed(i, ci, inp) {
+  const spec = steps[i].cubes[ci];
+  if (spec) spec.params.speed = +inp.value;
+  const out = inp.closest('.slider-wrap').querySelector('.slider-val');
+  if (out) out.textContent = inp.value;
+}
+function onOffset(i, ci, inp) {
+  const spec = steps[i].cubes[ci];
+  if (spec) spec.params.offset = +inp.value;
+  const out = inp.closest('.slider-wrap').querySelector('.slider-val');
+  if (out) out.textContent = inp.value;
 }
 function onDur(i, inp) { steps[i].duration_s = +inp.value; }
 function rmStep(i) { steps.splice(i,1); if(!steps.length) steps=[{duration_s:5,cubes:{0:{primitive:'rainbow',params:{}},1:null,2:null}}]; renderEditor(); }
@@ -189,36 +331,61 @@ document.getElementById('add-step').onclick = () => {
 };
 
 // ---- visualizer (T19): run the sequence live ----
-let cubeState = [{p:'off',params:{}},{p:'off',params:{}},{p:'off',params:{}}];
 let t0 = performance.now()/1000;
 
+// Sign hammer geometry (SPEC §C): the hammer pivots around the BOTTOM end of
+// its handle (SVG point 170,118, right side of the anvil top); the head is
+// the upper end and swings counterclockwise from straight up to pointing
+// left. Rotation is stepped (jumps, no in-between frames) around that pivot.
+const SIGN_PIVOT = [170, 118];
+
+function updateSign(t) {
+  // fixed hammer loop (mirror kubusd/scheduler.py):
+  // raised → mid-swing → impact → impact+sparks → impact(no sparks)
+  // → JUMP back to raised. Cycle ≈3s; board never goes dark.
+  const cyc = t % 3.0;
+  const RAISE = 1.2, SWING = 0.5, IMPACT = 0.4, SPARK = 0.5;
+  const impStart = RAISE + SWING, sparkStart = impStart + IMPACT;
+  const on = id => document.getElementById(id).classList;
+  on('sign-anvil').add('on'); // always on
+  on('sign-s1').toggle('on', cyc < RAISE);
+  on('sign-s2').toggle('on', cyc >= RAISE && cyc < impStart);
+  on('sign-s3').toggle('on', cyc >= impStart);
+  const sparking = cyc >= sparkStart && cyc < sparkStart + SPARK;
+  on('sign-spark').toggle('on', sparking);
+
+  // animate the SVG hammer: 0° raised, −45° mid-swing, −90° impact (pointing
+  // left), snapped — no gradual lift (matches scheduler step behaviour)
+  let deg = 0;
+  if (cyc >= RAISE && cyc < impStart) deg = -45;
+  else if (cyc >= impStart) deg = -90;
+  const hg = document.getElementById('hammer-g');
+  if (hg) hg.setAttribute('transform', `rotate(${deg} ${SIGN_PIVOT[0]} ${SIGN_PIVOT[1]})`);
+  const sg = document.getElementById('spark-g');
+  if (sg) sg.style.opacity = sparking ? '1' : '0';
+}
+
 function applyVisual(t) {
+  updateSign(t);  // sign runs on its own clock, independent of cube steps
   const seq = stepsJson();
   const total = seq.reduce((a,s)=>a+s.duration_s,0) || 1;
   let tt = t % total;
+  // simulate persistence from off across steps up to tt (V21): a cube not
+  // named in a step keeps the previous step's primitive
+  const st = [{p:'off',params:{}},{p:'off',params:{}},{p:'off',params:{}}];
+  let rem = tt, tIn = 0;
   for (const s of seq) {
-    if (tt < s.duration_s) {
-      const tIn = tt;
-      for (let ci=0; ci<3; ci++) {
-        const spec = s.cubes[ci];
-        if (spec && spec.primitive) cubeState[ci] = {p:spec.primitive, params:spec.params||{}};
-        const st = cubeState[ci];
-        const color = (PRIMS[st.p]||PRIMS.off)(tIn, st.params);
-        document.getElementById('cube'+ci).style.background =
-          `rgb(${Math.round(color[0]*255)},${Math.round(color[1]*255)},${Math.round(color[2]*255)})`;
-      }
-      // sign: fixed hammer cycle (mirror scheduler.py)
-      const cyc = tIn % 8.0;
-      const lamp = id => document.getElementById(id).classList.toggle('on',
-        cyc>=0&&cyc<8); // anvil always on
-      lamp('sign-anvil'); document.getElementById('sign-anvil').classList.add('on');
-      document.getElementById('sign-s1').classList.toggle('on', cyc<1);
-      document.getElementById('sign-s2').classList.toggle('on', cyc>=1&&cyc<2);
-      document.getElementById('sign-s3').classList.toggle('on', cyc>=2&&cyc<4.5);
-      document.getElementById('sign-spark').classList.toggle('on', cyc>=3&&cyc<4.5);
-      break;
+    for (let ci=0; ci<3; ci++) {
+      const spec = s.cubes[ci];
+      if (spec && spec.primitive) st[ci] = {p:spec.primitive, params:spec.params||{}};
     }
-    tt -= s.duration_s;
+    if (rem < s.duration_s) { tIn = rem; break; }
+    rem -= s.duration_s;
+  }
+  for (let ci=0; ci<3; ci++) {
+    const color = (PRIMS[st[ci].p]||PRIMS.off)(tIn, st[ci].params);
+    document.getElementById('cube'+ci).style.background =
+      `rgb(${Math.round(color[0]*255)},${Math.round(color[1]*255)},${Math.round(color[2]*255)})`;
   }
 }
 
@@ -239,19 +406,49 @@ vizLoop();
 </script>
 
 <style>
-.viz-cubes { display:flex; gap:16px; justify-content:center; margin-bottom:12px; }
-.cube { width:110px; height:110px; border-radius:12px; background:#111;
-        color:#fff; display:flex; align-items:flex-end; justify-content:center;
-        padding-bottom:6px; font-size:12px; border:1px solid var(--border);
-        transition: background 0.08s linear; }
-.viz-sign { display:flex; gap:8px; align-items:center; justify-content:center; }
-.sign-lamp { width:34px; height:34px; border-radius:50%; background:#222; color:#666;
-             display:flex; align-items:center; justify-content:center; font-size:16px; }
+/* two-column editor: step editor left, physical rig (sign board + cube
+   stack) right — matches the real layout (docs/sign-layout.svg) */
+.editor-layout { display:flex; gap:32px; align-items:flex-start;
+                 margin-top:18px; }
+.editor-col { flex:1 1 auto; min-width:0; }
+.rig-col { flex:0 0 auto; display:flex; flex-direction:column;
+           align-items:center; gap:12px; }
+.viz-board { background:#000; border:1px solid var(--border); border-radius:10px;
+             padding:6px; }
+.hammer-svg { width:120px; height:auto; display:block; }
+#hammer-g { transition: transform 0.05s linear; }
+#spark-g { transition: opacity 0.05s linear; }
+.viz-sign { display:flex; gap:6px; align-items:center; justify-content:center; }
+.sign-lamp { width:30px; height:30px; border-radius:50%; background:#222; color:#666;
+             display:flex; align-items:center; justify-content:center; font-size:13px;
+             font-weight:700; }
 .sign-lamp.on { background:#ffdd66; color:#222; }
+/* IBC tanks are literal cubes — equal sides (1 m³) */
+.viz-cubes { display:flex; flex-direction:column; gap:8px; }
+.cube { width:96px; height:96px; border-radius:8px; background:#111;
+        color:#fff; display:flex; align-items:center; justify-content:center;
+        font-size:12px; border:1px solid var(--border);
+        transition: background 0.08s linear; }
 .step-card { border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px; }
 .step-head { display:flex; gap:10px; align-items:center; margin-bottom:8px; }
-.cube-row { display:flex; gap:10px; align-items:center; margin-bottom:6px; }
-.cube-label { width:60px; color:var(--muted); font-size:13px; }
-.cube-row select { width:auto; margin:0; }
+.cube-head, .cube-row { display:grid; grid-template-columns: 64px 110px 44px 1fr 1fr 1fr;
+                        gap:10px; align-items:center; margin-bottom:6px; }
+.cube-head { color:var(--muted); font-size:12px; text-transform:uppercase;
+             letter-spacing:.03em; margin-bottom:4px; }
+.cube-label { color:var(--muted); font-size:13px; }
+.cube-row select { width:100%; margin:0; }
+.color-wrap { display:flex; align-items:center; justify-content:center; }
+.color-wrap input[type=color] { width:100%; height:28px; padding:0; border:1px solid var(--border);
+                                border-radius:4px; background:none; cursor:pointer; }
+.color-wrap input[type=color]:disabled { opacity:.25; cursor:not-allowed; }
+.slider-wrap { display:flex; align-items:center; gap:8px; }
+.slider-wrap input[type=range] { flex:1 1 auto; min-width:0; margin:0; }
+.slider-val { font-size:12px; color:var(--muted); min-width:2.4em; text-align:right; }
+.prim-table { width:100%; border-collapse:collapse; margin-top:8px; }
+.prim-table th, .prim-table td { text-align:left; padding:5px 10px; border-bottom:1px solid var(--border);
+                                 vertical-align:top; }
+.prim-table th { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
+.prim-table td.y { color:#3c9; font-weight:600; }
+.prim-table td.n { color:var(--muted); }
 </style>
 {% endblock %}

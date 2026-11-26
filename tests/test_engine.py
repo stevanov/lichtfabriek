@@ -130,3 +130,152 @@ def test_static_dim():
     engine.start()
     f = engine.step()
     assert abs(f.strips[0][0] - 0.5) < 0.05
+
+
+def test_sparkle_is_multicolor():
+    """Sparkle flashes in RANDOM colors from the palette, not one fixed color."""
+    from kubusd.engine import prim_sparkle
+
+    seen = set()
+    for i in range(2000):
+        c = prim_sparkle(i / 100.0, {"speed": 2.0})
+        if c[0] > 0 or c[1] > 0 or c[2] > 0:  # a lit flash
+            seen.add((round(c[0], 2), round(c[1], 2), round(c[2], 2)))
+    assert len(seen) >= 3, f"sparkle should show multiple colors, saw {len(seen)}"
+    # and at least one non-white color appears (default palette is colorful)
+    non_white = [c for c in seen if c != (1.0, 1.0, 1.0)]
+    assert non_white, "sparkle should include non-white colors"
+
+
+def test_speed_uniform_multiplier():
+    """`speed` means the same for every primitive: 1 = normal, 2 = faster,
+    0.5 = slower (SPEC §C). Rate-based primitives advance hue faster with
+    higher speed; period-based primitives (strobe) flash more often."""
+    from kubusd.engine import prim_rainbow, prim_strobe, _period, _rate
+
+    # helper level: rate grows with speed; period shrinks with speed
+    assert _rate(2.0, 0.5) > _rate(1.0, 0.5) > _rate(0.5, 0.5)
+    assert _period(1.0, 2.0) < _period(1.0, 1.0) < _period(1.0, 0.5)
+
+    # period-based: count on/off transitions over a 4 s window
+    def transitions(speed):
+        prev = None
+        n = 0
+        for i in range(400):
+            c = prim_strobe(i / 100.0, {"speed": speed})
+            on = c[0] > 0.0
+            if prev is not None and on != prev:
+                n += 1
+            prev = on
+        return n
+
+    slow = transitions(0.5)
+    norm = transitions(1.0)
+    fast = transitions(2.0)
+    assert slow < norm < fast, f"strobe transitions {slow} < {norm} < {fast}"
+
+    # rate-based: count full hue wraps (returns to red) in a 4 s window
+    def red_events(speed):
+        prev = False
+        n = 0
+        for i in range(400):
+            c = prim_rainbow(i / 100.0, {"speed": speed})
+            red = c[0] > 0.9 and c[1] < 0.2 and c[2] < 0.2
+            if red and not prev:
+                n += 1
+            prev = red
+        return n
+
+    sr, nr, fr = red_events(0.5), red_events(1.0), red_events(2.0)
+    assert sr < nr < fr, f"rainbow hue wraps {sr} < {nr} < {fr}"
+
+
+def test_offset_shifts_phase():
+    """params.offset is a FRACTION of one animation cycle (0..1): offset=1.0
+    must reproduce the base frame; offset=0.5 must shift to the opposite phase
+    (e.g. knight flash moved by half a cycle)."""
+    from kubusd.engine import prim_rainbow, prim_knight
+
+    # rainbow: offset=1.0 (full cycle) lands on the same hue as offset=0
+    a = prim_rainbow(1.0, {"speed": 1.0, "offset": 0.0})
+    b = prim_rainbow(1.0, {"speed": 1.0, "offset": 1.0})
+    assert abs(a[0] - b[0]) < 1e-6 and abs(a[1] - b[1]) < 1e-6
+
+    # knight: at half-cycle offset the flash is on the opposite side, so at
+    # wall times where one cube is lit the other is off (and vice versa)
+    on_times = [t / 20.0 for t in range(20)]
+    lit0 = [prim_knight(t, {"speed": 1.0, "offset": 0.0})[0] > 0 for t in on_times]
+    lit1 = [prim_knight(t, {"speed": 1.0, "offset": 0.5})[0] > 0 for t in on_times]
+    assert lit0 != lit1, "half-cycle offset should flip the knight flash"
+    assert any(a_ and not b_ for a_, b_ in zip(lit0, lit1)), "cubes must be out of phase"
+
+
+def test_offset_full_cycle_is_noop():
+    """offset=1.0 must reproduce offset=0.0 for every primitive (full cycle)."""
+    import math
+    from kubusd.engine import prim_pulse, prim_random, prim_knight, prim_fire
+    cols = [[255, 0, 0], [0, 255, 0], [0, 0, 255]]
+
+    def close(a, b):
+        return all(math.isclose(x, y, rel_tol=1e-9, abs_tol=1e-9)
+                   for x, y in zip(a, b))
+
+    for t in (0.1, 0.7, 1.3):
+        assert close(prim_pulse(t, {"speed": 1.0, "offset": 0.0, "colors": cols}),
+                     prim_pulse(t, {"speed": 1.0, "offset": 1.0, "colors": cols}))
+        assert close(prim_random(t, {"speed": 1.0, "offset": 0.0}),
+                     prim_random(t, {"speed": 1.0, "offset": 1.0}))
+        assert close(prim_fire(t, {"speed": 1.0, "offset": 0.0}),
+                     prim_fire(t, {"speed": 1.0, "offset": 1.0}))
+        assert close(prim_knight(t, {"speed": 1.0, "offset": 0.0}),
+                     prim_knight(t, {"speed": 1.0, "offset": 1.0}))
+
+
+def test_chase_frequency_capped():
+    """V14: chase must not flash faster than a 3 Hz strobe at the same speed
+    (argon #1: the old quarter-phase chase doubled the flash rate)."""
+    from kubusd.engine import prim_chase, prim_strobe
+
+    def transitions(prim, speed):
+        prev, n = None, 0
+        for i in range(600):  # 6 s at 100 Hz
+            c = prim(i / 100.0, {"speed": speed})
+            on = c[0] > 0
+            if prev is not None and on != prev:
+                n += 1
+            prev = on
+        return n
+
+    chase_n = transitions(prim_chase, 3.0)
+    strobe_n = transitions(prim_strobe, 3.0)
+    # a 3 Hz strobe = 3 on/off pairs per second = ~36 transitions in 6 s
+    assert strobe_n <= 37, f"strobe baseline broken: {strobe_n}"
+    assert chase_n <= strobe_n + 1, (
+        f"chase flashes faster than strobe at the same speed: {chase_n} vs {strobe_n}")
+
+
+def test_chase_offset_changes_phase():
+    """offset=0.5 must actually anti-phase chase (was a no-op before, argon #1)."""
+    from kubusd.engine import prim_chase
+    times = [0.1, 0.3, 0.5, 0.7]
+    a = [prim_chase(t, {"speed": 1.0, "offset": 0.0})[0] > 0 for t in times]
+    b = [prim_chase(t, {"speed": 1.0, "offset": 0.5})[0] > 0 for t in times]
+    assert a != b, "half-cycle offset should shift the chase flash"
+
+
+def test_fire_and_random_respond_to_speed():
+    """fire/random are not strobe-clamped: higher speed = faster change (argon #2)."""
+    from kubusd.engine import prim_fire, prim_random
+
+    def changes(prim, speed):
+        prev, n = None, 0
+        for i in range(400):  # 4 s at 100 Hz
+            c = prim(i / 100.0, {"speed": speed})
+            key = tuple(round(x, 2) for x in c)
+            if prev is not None and key != prev:
+                n += 1
+            prev = key
+        return n
+
+    assert changes(prim_fire, 3.0) > changes(prim_fire, 0.5)
+    assert changes(prim_random, 3.0) > changes(prim_random, 0.5)

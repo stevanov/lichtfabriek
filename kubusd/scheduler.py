@@ -1,16 +1,36 @@
 """kubusd sign scheduler.
 
 The sign runs a FIXED always-on animation of the 5 outputs (SPEC §C) — a
-hammer falling in 3 steps onto an always-on anvil, then sparks:
+hammer falling onto an always-on anvil, then sparks:
 
   output 0 = anvil    (always on)
-  outputs 1-3 = hammer steps (fall in sequence)
-  output 4 = sparks   (after the hammer hits)
+  output 1 = hammer pose 1: upright/vertical, raised high (head at top)
+  output 2 = hammer pose 2: tilted ~45° to the left, mid-swing
+  output 3 = hammer pose 3: nearly horizontal, pointing left, head resting
+             on the anvil top (impact pose)
+  output 4 = sparks: a few thin diagonal lines flashing up and to the left
+             of the head
 
-The cycle repeats (default period ~8 s). A time-based schedule + manual
-override gate whether the whole sign runs at all (V5, V18). Manual MQTT
-override wins over the schedule and expires after OVERRIDE_TTL. Without a
-synced clock the sign falls back to a defined default state (V18).
+Geometry: the hammer pivots around the BOTTOM END of its handle, which sits
+at the right side of the anvil's top face; the head is the far (upper) end
+and swings counterclockwise from straight up to pointing left.
+
+The loop (board never goes dark — only hammer pose + sparks change), total
+cycle ~3 s:
+
+  1. hammer upright/vertical, head at the top, handle down to the pivot
+  2. hammer tilted ~45° to the left, head upper-left (mid-swing)
+  3. hammer horizontal, pointing left, head resting on the anvil top
+     (impact pose), handle extending right
+  4. impact pose + sparks flash up-left of the head for a split second
+  5. sparks off, same frame as step 3 (impact pose, no sparks)
+  6. hammer JUMPS straight back to upright (step 1) — no gradual lift,
+     no in-between frames — and the loop repeats
+
+A time-based schedule + manual override gate whether the whole sign runs at
+all (V5, V18). Manual MQTT override wins over the schedule and expires after
+OVERRIDE_TTL. Without a synced clock the sign falls back to a defined
+default state (V18).
 """
 
 from __future__ import annotations
@@ -25,26 +45,35 @@ log = logging.getLogger("kubusd.scheduler")
 
 OVERRIDE_TTL = 3600  # manual override expires after 1 h (V18)
 
-# sign animation timings (seconds within one cycle) — SPEC §C constants
-CYCLE = 8.0
-STEP_DURATION = 1.0   # each hammer step (output 1, 2, 3)
-SPARK_DURATION = 1.5  # sparks after the hammer hits
-RESET_DURATION = 3.5  # dwell before the next fall
+# sign animation timings (seconds within one cycle) — SPEC §C constants.
+# The 6-step loop (raised → mid-swing → impact → impact+sparks → impact-rest
+# → JUMP back to raised) maps onto the 5 outputs; the board never goes dark
+# because the raised pose (or impact pose) is always lit between the swing
+# poses. Total cycle ≈ 3 s (Steven, 2026-11-26).
+CYCLE = 3.0
+RAISE_DURATION = 1.2   # pose 1: hammer upright, head at the top
+SWING_DURATION = 0.5   # pose 2: tilted ~45° to the left, mid-swing
+IMPACT_DURATION = 0.4  # pose 3: horizontal, pointing left, head on the anvil
+SPARK_DURATION = 0.5   # sparks flash up-left of the head, hammer stays in impact
+REST_DURATION = CYCLE - RAISE_DURATION - SWING_DURATION - IMPACT_DURATION - SPARK_DURATION
 
 
 def sign_sequence(now: float | None = None) -> list[bool]:
     """The fixed 5-output sign animation at wall-clock time `now`.
 
-    Returns [anvil, hammer_step1, hammer_step2, hammer_step3, sparks].
-    Hammer falls step1→step2→step3, stays down while sparks fly, then resets.
+    Returns [anvil, pose1_raised, pose2_midswing, pose3_impact, sparks].
+    Loop: raised → mid-swing → impact → impact+sparks → impact (sparks off)
+    → JUMP back to raised. Anvil is always on; one of the three poses is
+    always lit — the board never goes dark.
     """
     t = (now if now is not None else time.time()) % CYCLE
-    anvil = True  # always on
-    step1 = 0.0 <= t < STEP_DURATION
-    step2 = STEP_DURATION <= t < 2 * STEP_DURATION
-    step3 = 2 * STEP_DURATION <= t < 3 * STEP_DURATION + SPARK_DURATION
-    sparks = 3 * STEP_DURATION <= t < 3 * STEP_DURATION + SPARK_DURATION
-    return [anvil, step1, step2, step3, sparks]
+    anvil = True
+    pose1 = 0.0 <= t < RAISE_DURATION
+    pose2 = RAISE_DURATION <= t < RAISE_DURATION + SWING_DURATION
+    impact_start = RAISE_DURATION + SWING_DURATION
+    pose3 = impact_start <= t  # stays lit through sparks + rest until the loop
+    sparks = impact_start + IMPACT_DURATION <= t < impact_start + IMPACT_DURATION + SPARK_DURATION
+    return [anvil, pose1, pose2, pose3, sparks]
 
 
 class SignScheduler:

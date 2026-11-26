@@ -3,6 +3,32 @@
 All notable changes to Lichtfabriek. Format: reverse chronological.
 Versions follow `RELEASING.md` (v26.11_0.0-alphaN → … → v26.11_0.0).
 
+## v26.11_0.0-alpha3 — 2026-11-26
+
+- **Sign loop confirmed** (SPEC §C, `docs/sign-layout.svg`): hammer pivots at
+  the bottom of its handle on the right of the anvil, swings CCW to the left,
+  sparks flash up-left, then JUMPS back upright. Cycle ~3 s; the board never
+  goes dark. Constants in `kubusd/scheduler.py`; the sign runs on its own
+  clock in the visualizer.
+- **Animator page** reworked to the physical layout: step editor left,
+  physical rig right (hammer board on top, 3 true-cube IBC tanks stacked
+  below). Cube 1 (index 0) = topmost tank (SPEC V24).
+- **Step editor columns**: cube / primitive / color / brightness / speed /
+  offset, with a per-cube **color picker** (single-color primitives only),
+  **speed** (uniform multiplier, 1 = normal) and **offset** (phase shift as a
+  fraction of one animation cycle — stagger cubes for a knight/chase sweep).
+  Switching a primitive keeps the cube's speed/brightness/offset.
+- **Sparkle is multi-color**: each flash picks a random palette color.
+- **Primitive reference table** at the bottom of the page.
+- **ANSI simulator** matches the same layout (sign LEDs top, cube stack right).
+- **`.env.example`** added for kubusd + console (the contract referenced by
+  install.sh/config/README/SPEC, V9/V20).
+- **Console theme**: dark/light toggle + anvil favicon.
+- **Gemini-4-argon review fixes** (6 findings): chase flash-rate cap + engine/
+  preview parity + offset; no dead speed range (fire/random/fade unclamped);
+  admin-password placeholder now rejected; offset full-cycle no-op; editor
+  keep-row sliders disabled; SIM_COLS actually read.
+
 ## v26.11_0.0-alpha2 — 2026-11-26
 
 - Patterns are now **sequences of steps** (looped), each with per-cube

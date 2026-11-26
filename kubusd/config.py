@@ -89,6 +89,7 @@ class Config:
         c.tz = get("TZ", c.tz)
         c.frame_rate = int(get("FRAME_RATE", str(c.frame_rate)))
         c.log_level = get("LOG_LEVEL", c.log_level)
+        c.sim_cols = int(get("SIM_COLS", str(c.sim_cols)))
         return c
 
     @property

@@ -3,39 +3,55 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <title>{% block title %}Lichtfabriek Console{% endblock %}</title>
   <style>
-    :root { --orange:#ff700f; --ink:#222; --muted:#666; --bg:#faf7f2; --panel:#fff; --border:#e5dfd5; }
+    :root { --orange:#ff700f; --ink:#222; --muted:#666; --bg:#faf7f2; --panel:#fff; --border:#e5dfd5;
+            --header-bg:#222; --header-ink:#fff; --nav-link:#ddd; --pre-bg:#f4f1ec; }
+    html[data-theme="dark"] { --ink:#e8e6e1; --muted:#9a948a; --bg:#15171a; --panel:#1f2226; --border:#33383f;
+                              --header-bg:#0d0e10; --header-ink:#fff; --nav-link:#bbb; --pre-bg:#171a1d; }
     * { box-sizing:border-box; }
-    body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:var(--ink); }
-    header { background:#222; color:#fff; padding:12px 24px; display:flex; align-items:center; gap:16px; }
+    body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:var(--ink); transition: background .15s, color .15s; }
+    header { background:var(--header-bg); color:var(--header-ink); padding:12px 24px; display:flex; align-items:center; gap:16px; }
     header .brand { font-weight:700; letter-spacing:.5px; }
     header .brand b { color:var(--orange); }
     nav { margin-left:auto; display:flex; gap:16px; align-items:center; }
-    nav a { color:#ddd; text-decoration:none; }
+    nav a { color:var(--nav-link); text-decoration:none; }
     nav a:hover { color:var(--orange); }
+    .theme-btn { background:none; border:1px solid #444; color:var(--header-ink); border-radius:6px;
+                 padding:4px 10px; font:inherit; font-size:13px; cursor:pointer; margin-right:14px; }
+    .theme-btn:hover { border-color:var(--orange); color:var(--orange); }
     main { max-width:1000px; margin:24px auto; padding:0 24px; }
     .panel { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:20px; margin-bottom:20px; }
     h1,h2 { margin-top:0; }
     table { width:100%; border-collapse:collapse; }
     th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); font-size:14px; }
     th { color:var(--muted); font-weight:600; }
-    input,select,textarea { font:inherit; padding:8px 10px; border:1px solid var(--border); border-radius:6px; width:100%; margin-bottom:10px; }
+    input,select,textarea { font:inherit; padding:8px 10px; border:1px solid var(--border); border-radius:6px; width:100%; margin-bottom:10px; background:var(--panel); color:var(--ink); }
     button, .btn { background:var(--orange); color:#fff; border:0; border-radius:6px; padding:9px 16px; font:inherit; cursor:pointer; text-decoration:none; display:inline-block; }
     button.secondary, .btn.secondary { background:#eee; color:var(--ink); }
+    html[data-theme="dark"] button.secondary { background:#2a2e33; color:var(--ink); }
     .flash { padding:10px 14px; border-radius:6px; margin-bottom:16px; }
     .flash.ok { background:#e6f4ea; color:#1a7f37; border:1px solid #b7e3c3; }
     .flash.error { background:#fdecea; color:#c62828; border:1px solid #f5c2c0; }
     .muted { color:var(--muted); font-size:13px; }
     .row { display:flex; gap:12px; }
     .row > * { flex:1; }
-    pre { background:#f4f1ec; padding:12px; border-radius:6px; overflow:auto; }
+    pre { background:var(--pre-bg); padding:12px; border-radius:6px; overflow:auto; }
   </style>
+  <script>
+    // theme preference: localStorage, default light; applied before paint to avoid flash
+    (function () {
+      var t = localStorage.getItem('lf-theme') || 'light';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
 </head>
 <body>
   <header>
     <div class="brand">Licht<b>fabriek</b> Console</div>
     <nav>
+      <button type="button" class="theme-btn" id="theme-btn" title="Toggle dark / light mode" aria-label="Toggle theme">◐</button>
       {% if session.user %}
         <a href="{{ url_for('patterns') }}">Patterns</a>
         <a href="{{ url_for('new_pattern') }}">New pattern</a>
@@ -51,5 +67,19 @@
     {% endwith %}
     {% block content %}{% endblock %}
   </main>
+  <script>
+    (function () {
+      var btn = document.getElementById('theme-btn');
+      if (!btn) return;
+      function set(label) { btn.textContent = label === 'dark' ? '◑' : '◐'; }
+      set(localStorage.getItem('lf-theme') || 'light');
+      btn.addEventListener('click', function () {
+        var cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', cur);
+        localStorage.setItem('lf-theme', cur);
+        set(cur);
+      });
+    })();
+  </script>
 </body>
 </html>

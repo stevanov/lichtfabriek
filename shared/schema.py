@@ -41,6 +41,8 @@ MAX_COLORS = 64
 MAX_COLOR_CHANNELS = 3
 MIN_SPEED = 0.01
 MAX_SPEED = 20.0
+MIN_OFFSET = 0.0
+MAX_OFFSET = 1.0  # fraction of one animation cycle (phase offset, knight sweep etc.)
 
 # Sequence bounds (alpha2, V14)
 MAX_STEPS = 20
@@ -110,6 +112,11 @@ def validate_params(params: dict) -> None:
         raise ValueError("params.brightness must be a number")
     if not (0 <= brightness <= MAX_BRIGHTNESS):
         raise ValueError("params.brightness out of range")
+    offset = params.get("offset", 0.0)
+    if not isinstance(offset, (int, float)) or isinstance(offset, bool):
+        raise ValueError("params.offset must be a number")
+    if not (MIN_OFFSET <= offset <= MAX_OFFSET):
+        raise ValueError(f"params.offset out of range [{MIN_OFFSET},{MAX_OFFSET}]")
 
 
 def _validate_cube_spec(cube_spec, cube_idx: int) -> None:
