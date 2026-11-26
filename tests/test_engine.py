@@ -111,6 +111,51 @@ def test_unspecified_cubes_persist():
     assert f1.strips[0][0] > 0.4, "cube0 persists from step 0"
 
 
+def test_persistence_replays_across_loop_wrap():
+    """Persistence is resolved by REPLAY from off (V21 + V23): after the loop
+    wraps, step 0's unnamed cubes are OFF again — matching the JS preview —
+    not whatever the last step left behind (review finding)."""
+    engine = Engine(frame_rate=30)
+    steps = [
+        {"duration_s": 2.0, "cubes": {"0": {"primitive": "static",
+                                            "params": {"colors": [[255, 255, 255]]}}}},
+        {"duration_s": 2.0, "cubes": {"1": {"primitive": "static",
+                                            "params": {"colors": [[0, 0, 255]]}}}},
+        {"duration_s": 2.0, "cubes": {"2": {"primitive": "static",
+                                            "params": {"colors": [[0, 255, 0]]}}}},
+    ]
+    engine.set_pattern(steps)
+    engine.start()
+    # 2nd loop, step 0 (t=6.5): cube1/cube2 must be OFF, not persisting blue/green
+    f = _step_at(engine, 6.5)
+    assert f.strips[0][0] > 0.4          # cube0 white again
+    assert f.strips[1] == [0.0, 0.0, 0.0], "loop wrap resets unnamed cubes"
+    assert f.strips[2] == [0.0, 0.0, 0.0], "loop wrap resets unnamed cubes"
+
+
+def test_render_error_renders_off_not_crash(monkeypatch):
+    """A primitive that raises must render off for that cube, never kill the
+    render loop (review finding: crash-loop on resume)."""
+    from kubusd.engine import PRIMITIVE_FUNCS
+    import time as _time
+
+    def boom(t, params):
+        raise RuntimeError("boom")
+
+    monkeypatch.setitem(PRIMITIVE_FUNCS, "boom", boom)
+    engine = Engine(frame_rate=30)
+    # bypass validation on purpose: the guard is defense in depth
+    engine.steps = [{"duration_s": 5.0,
+                     "cubes": {"0": {"primitive": "boom", "params": {}}}}]
+    engine._seq_t0 = _time.monotonic()
+    f = engine.step(dt=0.0)
+    assert f.strips[0] == [0.0, 0.0, 0.0], "erroring primitive renders off"
+    # engine still alive: a later good pattern renders normally
+    engine.set_pattern("static", {"colors": [[255, 0, 0]]})
+    f = engine.step(dt=0.0)
+    assert f.strips[0][0] > 0.4
+
+
 def test_new_primitives_render():
     engine = Engine(frame_rate=30)
     for name in ("random", "fire", "sparkle", "huesweep", "sine",

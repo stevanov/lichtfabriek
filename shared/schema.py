@@ -86,7 +86,37 @@ def _check_meta(meta: dict) -> None:
             raise ValueError(f"meta.{key} too long")
 
 
-def validate_params(params: dict) -> None:
+# per-primitive minimum `colors` arity (review 2026-11-26: a 1-color sine
+# used to raise IndexError at render time and crash-loop kubusd on resume)
+MIN_COLORS_FOR = {
+    "sine": 2,      # blends colors[0] and colors[1]
+}
+# primitives that read params.seed (must be an integer: a list/dict seed
+# raises TypeError inside random.Random)
+SEEDED_PRIMITIVES = {"holiday", "random", "fire", "sparkle"}
+MAX_SEED = 2**31 - 1
+
+
+def _validate_seed(primitive: str, params: dict) -> None:
+    seed = params.get("seed")
+    if seed is None:
+        return
+    if primitive in SEEDED_PRIMITIVES:
+        if not isinstance(seed, int) or isinstance(seed, bool):
+            raise ValueError(f"params.seed must be an integer for {primitive!r}")
+        if not (0 <= seed <= MAX_SEED):
+            raise ValueError(f"params.seed out of range [0,{MAX_SEED}]")
+
+
+def _validate_color_arity(primitive: str, colors: list) -> None:
+    minimum = MIN_COLORS_FOR.get(primitive, 1)
+    if len(colors) < minimum:
+        raise ValueError(
+            f"primitive {primitive!r} needs at least {minimum} color(s), "
+            f"got {len(colors)}")
+
+
+def validate_params(params: dict, primitive: str | None = None) -> None:
     """Validate primitive params + safety caps (V14). Raises ValueError."""
     if not isinstance(params, dict):
         raise ValueError("params must be an object")
@@ -107,6 +137,10 @@ def validate_params(params: dict) -> None:
                                and not isinstance(x, bool) and 0 <= x <= 255
                                for x in c)):
                 raise ValueError("each color must be [r,g,b] 0..255")
+    if primitive is not None:
+        if colors is not None:
+            _validate_color_arity(primitive, colors)
+        _validate_seed(primitive, params)
     brightness = params.get("brightness", 1.0)
     if not isinstance(brightness, (int, float)) or isinstance(brightness, bool):
         raise ValueError("params.brightness must be a number")
@@ -128,7 +162,7 @@ def _validate_cube_spec(cube_spec, cube_idx: int) -> None:
     primitive = cube_spec.get("primitive")
     if primitive not in PRIMITIVES:
         raise ValueError(f"cubes.{cube_idx}.primitive unknown {primitive!r}")
-    validate_params(cube_spec.get("params", {}))
+    validate_params(cube_spec.get("params", {}), primitive=primitive)
 
 
 def _validate_step(step: dict, idx: int) -> None:
@@ -191,7 +225,7 @@ def normalize_pattern(msg: dict) -> dict:
     if primitive not in PRIMITIVES:
         raise ValueError(f"unknown primitive {primitive!r}")
     params = msg.get("params", {})
-    validate_params(params)
+    validate_params(params, primitive=primitive)
     cube_spec = {"primitive": primitive, "params": params}
     return {
         "pattern_id": pattern_id,

@@ -12,6 +12,7 @@ Each primitive is a pure function of time t (seconds) + params -> a color
 from __future__ import annotations
 
 import colorsys
+import logging
 import math
 import random
 import time
@@ -293,8 +294,7 @@ class Engine:
         self.steps: list[dict] = []  # canonical steps form
         self._running = False
         self._seq_t0 = 0.0
-        # per-cube persistent settings: (primitive, params) or None = off
-        self._cube_state: list[tuple[str, dict] | None] = [None] * NUM_STRIPS
+        self._render_errors = 0
 
     def set_pattern(self, primitive_or_steps, params=None) -> None:
         """Accept legacy (primitive, params) or canonical steps list."""
@@ -308,7 +308,6 @@ class Engine:
                    "steps": primitive_or_steps}
         normalized = normalize_pattern(msg)
         self.steps = normalized["steps"]
-        self._cube_state = [None] * NUM_STRIPS
         self._seq_t0 = time.monotonic()
 
     def start(self) -> None:
@@ -330,6 +329,22 @@ class Engine:
             tt -= s["duration_s"]
         return len(self.steps) - 1, tt
 
+    def _state_at(self, idx: int) -> list[tuple[str, dict] | None]:
+        """Per-cube state at the START of step `idx`, resolved by replaying
+        the sequence from off (V21).
+
+        Replay (instead of incremental mutation) keeps the result correct
+        across loop wraps and render stalls, and matches the JS preview
+        exactly (V23; review 2026-11-26)."""
+        state: list[tuple[str, dict] | None] = [None] * NUM_STRIPS
+        for step in self.steps[:idx + 1]:
+            cubes = step.get("cubes", {})
+            for ci in range(NUM_STRIPS):
+                spec = cubes.get(str(ci))
+                if spec is not None:
+                    state[ci] = (spec["primitive"], spec.get("params", {}))
+        return state
+
     def step(self, dt: float | None = None) -> Frame:
         """Advance one frame: compute per-cube colors from the current step."""
         if dt is None:
@@ -338,18 +353,26 @@ class Engine:
         if not self.steps:
             return Frame()
         idx, t_in = self._current_step(t)
-        step = self.steps[idx]
-        cubes = step.get("cubes", {})
+        state = self._state_at(idx)
+        cubes = self.steps[idx].get("cubes", {})
         frame = Frame()
+        log = logging.getLogger("kubusd.engine")
         for ci in range(NUM_STRIPS):
             spec = cubes.get(str(ci))
-            if spec is None:
-                # persist previous step's settings (V21); None = off
-                prim_name, prim_params = self._cube_state[ci] or ("off", {})
-            else:
+            if spec is not None:
                 prim_name = spec["primitive"]
                 prim_params = spec.get("params", {})
-                self._cube_state[ci] = (prim_name, prim_params)
+            else:
+                prim_name, prim_params = state[ci] or ("off", {})
             fn = PRIMITIVE_FUNCS.get(prim_name, prim_off)
-            frame.strips[ci] = fn(t_in, prim_params)
+            try:
+                frame.strips[ci] = fn(t_in, prim_params)
+            except Exception as e:  # noqa: BLE001 — a render error must never
+                # kill the loop (review 2026-11-26): validation makes this
+                # near-impossible, but a hostile pattern must not crash-loop
+                self._render_errors += 1
+                if self._render_errors <= 5 or self._render_errors % 100 == 0:
+                    log.warning("render error %s on cube %d: %s",
+                                prim_name, ci, e)
+                frame.strips[ci] = [0.0, 0.0, 0.0]
         return frame

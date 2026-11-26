@@ -223,3 +223,50 @@ def test_activate_without_broker_no_500(client, monkeypatch):
     r = client.post("/patterns/pid2/activate", follow_redirects=True)
     assert r.status_code == 200
     assert b"MQTT publish failed" in r.data
+
+
+def test_alpha2_console_migration_rebuilds_table(tmp_path):
+    """The alpha2 console DB had primitive/params NOT NULL columns; the old
+    ADD-COLUMN migration left them in place and broke every new insert
+    (review finding). The rebuild must convert rows and allow inserts."""
+    import sqlite3
+
+    from console.db import ConsoleDB
+
+    p = tmp_path / "legacy-console.db"
+    conn = sqlite3.connect(str(p))
+    conn.executescript(
+        """
+        CREATE TABLE patterns (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pattern_id TEXT UNIQUE NOT NULL,
+            pattern_hash TEXT NOT NULL DEFAULT '',
+            title TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            creator TEXT NOT NULL,
+            created_ts REAL NOT NULL,
+            posting_ip TEXT NOT NULL,
+            primitive TEXT NOT NULL,
+            params TEXT NOT NULL,
+            active INTEGER NOT NULL DEFAULT 0
+        );
+        INSERT INTO patterns (pattern_id, title, creator, created_ts,
+                              posting_ip, primitive, params, active)
+        VALUES ('old1', 'Legacy', 'admin', 1000.0, '1.2.3.4', 'pulse', '{}', 0);
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    db = ConsoleDB(str(p))
+    # legacy row converted to steps
+    old = db.get_pattern("old1")
+    assert old is not None and old["steps"], "legacy row converted to steps"
+    # inserting a NEW pattern works (used to fail: primitive NOT NULL)
+    db.add_pattern("new1", "h1", "Fresh", "", "admin", "127.0.0.1",
+                   [{"duration_s": 5.0, "cubes": {}}])
+    assert db.get_pattern("new1") is not None
+    tables = {r[0] for r in db.conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'")}
+    assert "patterns_legacy" not in tables
+    db.close()
