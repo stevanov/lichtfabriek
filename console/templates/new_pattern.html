@@ -223,8 +223,12 @@ function stepsJson() {
 
 function onPrim(i, ci, sel) {
   if (!sel.value) { steps[i].cubes[ci] = null; }
-  else { steps[i].cubes[ci] = { primitive: sel.value,
-                                params: { brightness: 1.0, speed: 1.0 } }; }
+  else {
+    const prev = steps[i].cubes[ci] && steps[i].cubes[ci].params || {};
+    // keep the cube's existing speed/brightness/color when switching primitive
+    const params = { brightness: 1.0, speed: 1.0, ...prev };
+    steps[i].cubes[ci] = { primitive: sel.value, params };
+  }
   renderEditor();  // refresh sliders/color to the new primitive's defaults
 }
 function onColor(i, ci, inp) {
