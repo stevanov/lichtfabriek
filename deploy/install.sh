@@ -4,28 +4,25 @@
 # configurable prefix, fills the systemd unit template, enables the service.
 #
 # No absolute/host paths are hard-coded in this repo — the install prefix is
-# resolved here, at install time (SPEC V20).
+# resolved here, at install time (SPEC V20). Public repo: releases download
+# without auth.
 set -euo pipefail
 
 # ---- configurable, no private defaults baked in ----
 PREFIX="${KUBUSD_PREFIX:-/opt/lichtfabriek}"
 RUN_USER="${KUBUSD_USER:-lichtfabriek}"
-RELEASE_BASE="${KUBUSD_BASE:-https://github.com/stevanov/lichtfabriek}"
-AUTH_TOKEN="${KUBUSD_TOKEN:?set KUBUSD_TOKEN (GitHub fine-grained token, read:repository only)}"
+BASE="${KUBUSD_RELEASE_URL:-https://github.com/stevanov/lichtfabriek/releases/download}"
 SYSTEMD_DIR="${KUBUSD_SYSTEMD_DIR:-/etc/systemd/system}"
-VERSION="${KUBUSD_VERSION:?set KUBUSD_VERSION, e.g. v26.11_38.0}"
+VERSION="${KUBUSD_VERSION:?set KUBUSD_VERSION, e.g. v26.11_0.0-alpha1}"
 TARBALL="lichtfabriek-${VERSION}.tar.gz"
 SHAFILE="lichtfabriek-${VERSION}.sha256"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-# private repo: every release download needs the token (curl -H auth header)
-echo "==> downloading release ${VERSION} (private repo, token auth)"
-curl -fsSL -H "Authorization: token ${AUTH_TOKEN}" \
-  -o "$TMP/$TARBALL" "$RELEASE_BASE/releases/download/$VERSION/$TARBALL"
-curl -fsSL -H "Authorization: token ${AUTH_TOKEN}" \
-  -o "$TMP/$SHAFILE" "$RELEASE_BASE/releases/download/$VERSION/$SHAFILE"
+echo "==> downloading release ${VERSION} (public GitHub build)"
+curl -fsSL -o "$TMP/$TARBALL" "$BASE/$VERSION/$TARBALL"
+curl -fsSL -o "$TMP/$SHAFILE" "$BASE/$VERSION/$SHAFILE"
 
 echo "==> verifying sha256 (V10)"
 ( cd "$TMP" && sha256sum -c "$SHAFILE" )

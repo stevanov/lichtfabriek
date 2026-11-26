@@ -1,6 +1,6 @@
 # SPEC — Lichtfabriek: Pi Zero W animates 3 RGB cubes + LED sign, driven by MQTT patterns
 
-Grill 2026-11-26, review 2026-11-26 (ghce gpt-6-luna + claude-sonnet-5.5, all amendments applied). Two services in one monorepo: `kubusd` (headless Pi daemon) + `console` (Flask web app). Git flow master/devel. GitHub: TBD url.
+Grill 2026-11-26, review 2026-11-26 (ghce gpt-6-luna + claude-sonnet-5.5, all amendments applied). Two services in one monorepo: `kubusd` (headless Pi daemon) + `console` (Flask web app). Git flow master/devel. Repo: github.com/stevanov/lichtfabriek.
 
 ## §G
 
@@ -36,7 +36,7 @@ On a Pi Zero W v1.1, run a headless daemon (`kubusd`) that drives 3 PWM RGB stri
 - ? which public broker exactly (e.g. HiveMQ public vs broker.emqx.io) — configurable, decide at install.
 - ? exact GPIO pin map for 9 PWM + 5 sign outputs — comes from the physical wiring, set in `.env`.
 - ? where the old Python 2.7 code lives — port behavior from it if Steven provides it (not found in the local dev tree).
-- ? console hosting details (server IP/domain, GitHub URL) — TBD, config at install.
+- ? console hosting details (server IP/domain) — TBD, config at install.
 - ? which primitives ship in v1 — proposal: rainbow, pulse, fade, chase, holiday themes; expandable list. sign = fixed hammer animation, not user-selectable.
 
 ## §I

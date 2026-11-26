@@ -64,14 +64,14 @@ feature/*  ──>  devel  ──no-ff──>  master  ──tag──>  release
    git checkout master && git merge --no-ff devel
    git tag -a v26.11_0.0 -m "release v26.11_0.0"
    ```
-5. Create the release on GitHub: attach the artifacts `install.sh` expects
-   (exact names): `lichtfabriek-<tag>.tar.gz` +
-   `lichtfabriek-<tag>.sha256` (a `sha256sum` over the tarball).
+5. Create the release on GitHub (`https://github.com/stevanov/lichtfabriek`):
+   attach the artifacts `install.sh` expects (exact names):
+   `lichtfabriek-<tag>.tar.gz` + `lichtfabriek-<tag>.sha256` (a `sha256sum`
+   over the tarball).
 6. Announce in the makerspace channel.
 
 ## Rollback
 
 Keep the previous release tarball on GitHub. On the Pi, re-run the installer
-with the previous tag:
-`KUBUSD_VERSION=<previous-tag> KUBUSD_TOKEN=<token> ./deploy/install.sh`.
+with the previous tag: `KUBUSD_VERSION=<previous-tag> ./deploy/install.sh`.
 The install script keeps one previous copy of the app dir for instant rollback.

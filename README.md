@@ -66,23 +66,19 @@ them blindly. See `AGENTS.md` for how to work in this repo.
 
 ## Install on the Pi
 
-The repo is **private**, so releases are downloaded with a GitHub token
-(fine-grained, `read:repository` only — create one under
-Settings → Applications in GitHub). Install `pigpio` first:
+The repo is public on GitHub, so releases download without auth. Install
+`pigpio` first:
 
 ```bash
 sudo apt install -y pigpio
 ```
 
-Then fetch and run the installer with the token and a release tag. Because the
-repo is private, you cannot pipe `curl | bash` without auth — instead clone the
-repo once with the token, or download `install.sh` from the GitHub web UI:
+Then clone and run the installer with a release tag:
 
 ```bash
-# from a clone (token grants read):
 git clone https://github.com/stevanov/lichtfabriek.git
 cd lichtfabriek
-KUBUSD_TOKEN=<token> KUBUSD_VERSION=<tag> ./deploy/install.sh
+KUBUSD_VERSION=<tag> ./deploy/install.sh
 ```
 
 Release tags look like `v26.11_0.0-alpha1` (see `RELEASING.md` for the

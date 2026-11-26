@@ -2,8 +2,8 @@
 
 Searches tracked/committed files (excluding .git, .venv, data) for absolute
 path markers that would leak host layout: /home/, /mnt/c, /opt/..., /etc/...,
-/var/lib/..., plus the user's GitHub username in paths. The systemd unit may
-only contain __KUBUSD_*__ placeholders.
+/var/lib/..., plus private host usernames in paths. The systemd unit may only
+contain __KUBUSD_*__ placeholders.
 """
 
 from pathlib import Path
