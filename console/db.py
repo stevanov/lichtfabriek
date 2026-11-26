@@ -257,8 +257,8 @@ class ConsoleDB:
     def rate_limit_hits(self, ip: str, minute: int) -> int:
         with self._lock:
             row = self.conn.execute(
-                "SELECT COUNT(*) AS c FROM audit WHERE ip=? AND action='publish' "
-                "AND ts > ?",
+                "SELECT COUNT(*) AS c FROM audit WHERE ip=? AND action IN "
+                "('publish','activate','revoke','login') AND ts > ?",
                 (ip, minute),
             ).fetchone()
         return row["c"]

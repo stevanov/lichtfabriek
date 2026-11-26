@@ -17,6 +17,9 @@ os.environ.pop("TRUST_PROXY", None)
 from console.app import _bootstrap_admin, app, db  # noqa: E402
 
 
+import secrets as _secrets
+
+
 @pytest.fixture(autouse=True)
 def _reset_db():
     """Each test starts from a clean DB (module-level db is shared)."""
@@ -36,9 +39,26 @@ def client():
         yield c
 
 
+def _csrf_token(client) -> str:
+    """Put a CSRF token into the session (the before_request validator
+    compares it against the form's _csrf field)."""
+    with client.session_transaction() as s:
+        return s.setdefault("csrf", _secrets.token_hex(16))
+
+
+_orig_post = None
+
+
+def _post(client, url, data=None, **kwargs):
+    """client.post with the CSRF token merged into the form data."""
+    data = dict(data or {})
+    data.setdefault("_csrf", _csrf_token(client))
+    return client.post(url, data=data, **kwargs)
+
+
 def _login(client, username="admin", password="admin-password"):
-    return client.post("/login", data={"username": username, "password": password},
-                       follow_redirects=True)
+    return _post(client, "/login", data={"username": username, "password": password},
+                 follow_redirects=True)
 
 
 def test_bootstrap_admin_created():
@@ -47,13 +67,13 @@ def test_bootstrap_admin_created():
 
 
 def test_login_wrong_password(client):
-    r = client.post("/login", data={"username": "admin", "password": "nope"})
+    r = _post(client, "/login", data={"username": "admin", "password": "nope"})
     assert b"Invalid credentials" in r.data
 
 
 def test_login_ok_redirects_to_change_password(client):
     _bootstrap_admin()
-    r = client.post("/login", data={"username": "admin", "password": "admin-password"})
+    r = _post(client, "/login", data={"username": "admin", "password": "admin-password"})
     assert r.status_code in (302, 303)
     assert "/change-password" in r.headers["Location"]
 
@@ -67,13 +87,13 @@ def test_publish_pattern_and_ip_not_in_payload(client, monkeypatch):
     _bootstrap_admin()
     # create a normal user while still logged in as admin
     _login(client)
-    client.post("/change-password", data={"password": "newpass123",
+    _post(client, "/change-password", data={"password": "newpass123",
                                           "password2": "newpass123"})
-    client.post("/admin/users", data={"action": "create", "username": "bob",
+    _post(client, "/admin/users", data={"action": "create", "username": "bob",
                                       "password": "bobpass123"})
     client.get("/logout")
     # bob logs in and publishes
-    client.post("/login", data={"username": "bob", "password": "bobpass123"})
+    _post(client, "/login", data={"username": "bob", "password": "bobpass123"})
     # stub publisher so no real broker needed
     calls = []
 
@@ -84,7 +104,7 @@ def test_publish_pattern_and_ip_not_in_payload(client, monkeypatch):
         return 1
 
     monkeypatch.setattr("console.app.publisher.publish_pattern", fake_publish_pattern)
-    r = client.post("/patterns/new", data={
+    r = _post(client, "/patterns/new", data={
         "title": "Test pattern", "description": "d", "primitive": "rainbow",
         "speed": "1", "brightness": "0.5",
         "colors": "255,0,0;0,255,0",
@@ -95,8 +115,8 @@ def test_publish_pattern_and_ip_not_in_payload(client, monkeypatch):
 
 def test_rate_limit(client, monkeypatch):
     _bootstrap_admin()
-    client.post("/login", data={"username": "admin", "password": "admin-password"})
-    client.post("/change-password", data={"password": "adminpass123",
+    _post(client, "/login", data={"username": "admin", "password": "admin-password"})
+    _post(client, "/change-password", data={"password": "adminpass123",
                                           "password2": "adminpass123"})
 
     def fake_publish(msg, retain=True):
@@ -105,10 +125,10 @@ def test_rate_limit(client, monkeypatch):
     monkeypatch.setattr("console.app.publisher.publish_pattern", fake_publish)
     # RATE_LIMIT_PER_MINUTE = 3 -> 4th publish in a minute is limited
     for _ in range(3):
-        client.post("/patterns/new", data={
+        _post(client, "/patterns/new", data={
             "title": "p", "primitive": "off", "speed": "1", "brightness": "1",
         })
-    r = client.post("/patterns/new", data={
+    r = _post(client, "/patterns/new", data={
         "title": "p4", "primitive": "off", "speed": "1", "brightness": "1",
     }, follow_redirects=True)
     assert b"Rate limit" in r.data
@@ -116,21 +136,21 @@ def test_rate_limit(client, monkeypatch):
 
 def test_admin_required(client):
     _bootstrap_admin()
-    client.post("/login", data={"username": "admin", "password": "admin-password"})
-    client.post("/change-password", data={"password": "adminpass123",
+    _post(client, "/login", data={"username": "admin", "password": "admin-password"})
+    _post(client, "/change-password", data={"password": "adminpass123",
                                           "password2": "adminpass123"})
-    client.post("/admin/users", data={"action": "create", "username": "carl",
+    _post(client, "/admin/users", data={"action": "create", "username": "carl",
                                       "password": "carlpass123"})
     client.get("/logout")
-    client.post("/login", data={"username": "carl", "password": "carlpass123"})
+    _post(client, "/login", data={"username": "carl", "password": "carlpass123"})
     r = client.get("/admin")
     assert r.status_code == 403
 
 
 def test_activate_pattern(client, monkeypatch):
     _bootstrap_admin()
-    client.post("/login", data={"username": "admin", "password": "admin-password"})
-    client.post("/change-password", data={"password": "adminpass123",
+    _post(client, "/login", data={"username": "admin", "password": "admin-password"})
+    _post(client, "/change-password", data={"password": "adminpass123",
                                           "password2": "adminpass123"})
     calls = []
 
@@ -144,7 +164,7 @@ def test_activate_pattern(client, monkeypatch):
                "cubes": {"0": {"primitive": "rainbow", "params": {}},
                          "1": None, "2": None}}]
     db.add_pattern("pid1", "hash1", "Title", "desc", "admin", "127.0.0.1", _steps)
-    r = client.post("/patterns/pid1/activate", follow_redirects=True)
+    r = _post(client, "/patterns/pid1/activate", follow_redirects=True)
     assert b"activated" in r.data
     assert calls and calls[0]["pattern_hash"] == "hash1"
 
@@ -152,8 +172,8 @@ def test_activate_pattern(client, monkeypatch):
 def test_activate_old_pattern_without_hash(client, monkeypatch):
     # regression: rows migrated without a hash must still activate (hash fallback)
     _bootstrap_admin()
-    client.post("/login", data={"username": "admin", "password": "admin-password"})
-    client.post("/change-password", data={"password": "adminpass123",
+    _post(client, "/login", data={"username": "admin", "password": "admin-password"})
+    _post(client, "/change-password", data={"password": "adminpass123",
                                           "password2": "adminpass123"})
     calls = []
     monkeypatch.setattr("console.app.publisher.publish_pattern",
@@ -163,15 +183,15 @@ def test_activate_old_pattern_without_hash(client, monkeypatch):
         "created_ts, posting_ip, steps) "
         "VALUES ('old1','','T','a',1,'1.2.3.4','[]')")
     db.conn.commit()
-    r = client.post("/patterns/old1/activate", follow_redirects=True)
+    r = _post(client, "/patterns/old1/activate", follow_redirects=True)
     assert b"activated" in r.data
     assert calls and calls[0]["pattern_hash"]  # fallback hash generated
 
 
 def test_publish_sequence_steps(client, monkeypatch):
     _bootstrap_admin()
-    client.post("/login", data={"username": "admin", "password": "admin-password"})
-    client.post("/change-password", data={"password": "adminpass123",
+    _post(client, "/login", data={"username": "admin", "password": "admin-password"})
+    _post(client, "/change-password", data={"password": "adminpass123",
                                           "password2": "adminpass123"})
     calls = []
 
@@ -189,7 +209,7 @@ def test_publish_sequence_steps(client, monkeypatch):
         {"duration_s": 2.0,
          "cubes": {"1": {"primitive": "static", "params": {"colors": [[0, 0, 255]]}}}},
     ]
-    r = client.post("/patterns/new", data={
+    r = _post(client, "/patterns/new", data={
         "title": "Seq", "steps": json.dumps(steps),
     }, follow_redirects=True)
     assert b"published" in r.data
@@ -198,10 +218,10 @@ def test_publish_sequence_steps(client, monkeypatch):
 
 def test_publish_bad_steps_json(client, monkeypatch):
     _bootstrap_admin()
-    client.post("/login", data={"username": "admin", "password": "admin-password"})
-    client.post("/change-password", data={"password": "adminpass123",
+    _post(client, "/login", data={"username": "admin", "password": "admin-password"})
+    _post(client, "/change-password", data={"password": "adminpass123",
                                           "password2": "adminpass123"})
-    r = client.post("/patterns/new", data={
+    r = _post(client, "/patterns/new", data={
         "title": "Bad", "steps": "{not json",
     }, follow_redirects=True)
     assert b"Invalid steps JSON" in r.data
@@ -209,8 +229,8 @@ def test_publish_bad_steps_json(client, monkeypatch):
 
 def test_activate_without_broker_no_500(client, monkeypatch):
     _bootstrap_admin()
-    client.post("/login", data={"username": "admin", "password": "admin-password"})
-    client.post("/change-password", data={"password": "adminpass123",
+    _post(client, "/login", data={"username": "admin", "password": "admin-password"})
+    _post(client, "/change-password", data={"password": "adminpass123",
                                           "password2": "adminpass123"})
     db.add_pattern("pid2", "hash2", "T2", "", "admin", "127.0.0.1",
                    [{"duration_s": 5.0,
@@ -220,7 +240,7 @@ def test_activate_without_broker_no_500(client, monkeypatch):
         raise ConnectionError("broker down")
 
     monkeypatch.setattr("console.app.publisher.publish_pattern", boom)
-    r = client.post("/patterns/pid2/activate", follow_redirects=True)
+    r = _post(client, "/patterns/pid2/activate", follow_redirects=True)
     assert r.status_code == 200
     assert b"MQTT publish failed" in r.data
 
@@ -270,3 +290,67 @@ def test_alpha2_console_migration_rebuilds_table(tmp_path):
         "SELECT name FROM sqlite_master WHERE type='table'")}
     assert "patterns_legacy" not in tables
     db.close()
+
+
+def test_csrf_required_on_post(client):
+    """Every POST must carry the session CSRF token (review finding)."""
+    _bootstrap_admin()
+    r = client.post("/login", data={"username": "admin",
+                                    "password": "admin-password"})
+    assert r.status_code == 400, "POST without CSRF token must be rejected"
+    # with the token it works
+    r = _post(client, "/login", data={"username": "admin",
+                                      "password": "admin-password"})
+    assert r.status_code == 302
+
+
+def test_csrf_token_reuse_of_foreign_token_rejected(client):
+    _bootstrap_admin()
+    # token from a DIFFERENT session must not pass
+    with app.test_client() as other:
+        foreign = _csrf_token(other)
+    r = client.post("/login", data={"username": "admin",
+                                    "password": "admin-password",
+                                    "_csrf": foreign})
+    assert r.status_code == 400
+
+
+def test_lang_toggle_sets_cookie_and_stays_local(client):
+    r = _post(client, "/lang", data={"lang": "nl"})
+    assert r.status_code == 302
+    cookie = client.get_cookie("lf_lang")
+    assert cookie is not None and cookie.value == "nl"
+    # open-redirect guard: an external referrer falls back to /patterns
+    r = client.post("/lang", data={"lang": "nl", "_csrf": _csrf_token(client)},
+                    headers={"Referer": "https://evil.example/steal"},
+                    follow_redirects=False)
+    assert (r.headers.get("Location") or "").startswith("/"), \
+        "external referrer must not be followed"
+
+
+def test_dutch_ui_strings(client):
+    """With lf_lang=nl the UI renders Dutch (alpha4 i18n)."""
+    client.set_cookie("lf_lang", "nl")
+    r = client.get("/login")
+    assert "Inloggen" in r.get_data(as_text=True)
+    # default (no cookie) stays English
+    client.delete_cookie("lf_lang")
+    r = client.get("/login")
+    assert "Log in" in r.get_data(as_text=True)
+
+
+def test_must_change_password_is_a_guard(client):
+    """The forced first-login change must block /patterns too, not just be a
+    redirect suggestion (review finding)."""
+    _bootstrap_admin()
+    _post(client, "/login", data={"username": "admin",
+                                  "password": "admin-password"})
+    # do NOT change the password -> /patterns must bounce to change-password
+    r = client.get("/patterns", follow_redirects=False)
+    assert r.status_code == 302
+    assert "/change-password" in (r.headers.get("Location") or "")
+    # after changing it, /patterns is reachable
+    _post(client, "/change-password", data={"password": "newpass123",
+                                            "password2": "newpass123"})
+    r = client.get("/patterns", follow_redirects=False)
+    assert r.status_code == 200
