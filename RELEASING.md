@@ -25,14 +25,15 @@ v26.11_0.0-alpha1  ->  ...  ->  v26.11_0.0-alphaN
    ->  v26.11_0.0  (final, tagged on master)
 ```
 
-- Pre-release tags are created on `devel` (or a release branch off it); they
-  are NOT merged to master.
+- Pre-release tags are created on `master` (merged from `devel` with `--no-ff`),
+  so each alpha/beta/rc is a buildable, tagged state of the repo.
 - Each pre-release runs the full test suite + simulator demo; anything broken
   is fixed before the next tag.
 - `shared/version.next_version()` suggests the next suffix automatically
   (alphaN→alphaN+1); moving alpha→beta→rc is a human decision based on how
   stable the build feels.
-- Only the final `v26.11_0.0` goes through `devel` → `master` → tag.
+- The final `v26.11_0.0` is the release tag on `master`; pre-releases are
+  earlier tags on the same branch.
 
 Between tags `git describe` appends `-<n>-g<sha>`. Release artifacts (tarball,
 image) carry a baked `VERSION` file; the target has no `.git`, so version comes
@@ -46,8 +47,8 @@ feature/*  ──>  devel  ──no-ff──>  master  ──tag──>  release
 
 - All work on `feature/*` branches off `devel`.
 - Merge to `devel` with `--no-ff`.
-- `master` holds only final releases.
-- Pre-release tags live on `devel`/release branches, never on `master`.
+- `master` holds releases: every alpha/beta/rc AND the final release is tagged
+  there (each is merged `devel` → `master` with `--no-ff`).
 - Never move or delete a tag.
 
 ## Release procedure (per pre-release or final)
@@ -55,15 +56,12 @@ feature/*  ──>  devel  ──no-ff──>  master  ──tag──>  release
 1. On `devel`: set the version (`VERSION` file — e.g. `v26.11_0.0-alpha1`),
    update `CHANGELOG.md`, commit.
 2. Run tests: `.venv/bin/python -m pytest tests/` — all green.
-3. Pre-release: tag directly on `devel`:
-   ```bash
-   git tag -a v26.11_0.0-alpha1 -m "alpha 1"
-   ```
-4. Final release: merge `devel` → `master` with `--no-ff`, then tag there:
+3. Merge `devel` → `master` with `--no-ff`, then tag (pre-release OR final):
    ```bash
    git checkout master && git merge --no-ff devel
-   git tag -a v26.11_0.0 -m "release v26.11_0.0"
+   git tag -a v26.11_0.0-alpha1 -m "alpha 1"   # or v26.11_0.0 for the final
    ```
+4. Push master + the tag.
 5. Create the release on GitHub (`https://github.com/stevanov/lichtfabriek`):
    attach the artifacts `install.sh` expects (exact names):
    `lichtfabriek-<tag>.tar.gz` + `lichtfabriek-<tag>.sha256` (a `sha256sum`

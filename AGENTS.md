@@ -7,8 +7,9 @@ design lives in `SPEC.md`.
 
 - **Two services, one monorepo**: `kubusd/` (Pi daemon, headless) and
   `console/` (Flask web app). Both are Python 3. Shared code in `shared/`.
-- **Git flow**: `feature/*` → `devel` → `master` (releases only). Never push
-  directly to `master`. Merges to `devel`/`master` use `--no-ff`.
+- **Git flow**: `feature/*` → `devel` → `master`. Never push directly to
+  `master`; every release (alpha/beta/rc/final) is merged `devel` → `master`
+  with `--no-ff` and tagged there (see `RELEASING.md`).
 - **Versioning**: one version line `v<year>.<month>_<minor>.<bugfix>` (regex
   `^v\d{2}\.\d{2}_\d+\.\d+$`). See `RELEASING.md`.
 - **No hardware on dev**: test animation/mqtt via kubusd simulator
