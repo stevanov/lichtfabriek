@@ -8,7 +8,7 @@ On a Pi Zero W v1.1, run a headless daemon (`kubusd`) that drives 3 PWM RGB stri
 
 ## §C
 
-- hardware: Pi Zero W v1.1 (armv6, single-core, 512 MB RAM, 26 usable GPIO). 3 RGB strips = 9 PWM channels + 5 on/off sign outputs = 14 signals.
+- hardware: Pi Zero W v1.1 (armv6, single-core, 512 MB RAM, 26 usable GPIO). 3 cubes, each with ONE plain RGB LED strip, whole strip one color at a time (like a single pixel) → 3 color outputs = 9 PWM channels (R/G/B per cube). NO addressable pixels (no WS2812/Neopixel). Plus 5 on/off sign outputs = 14 signals total.
 - PWM: pigpio daemon (pigpiod) runs on the Pi host; kubusd connects over its socket. Hardware PWM impossible for 9 channels (2 channels on BCM2835). software PWM rejected (jitter, CPU on single core).
 - deployment Pi: systemd unit + install script pulled from a GitHub release. release tarball ships with a checksum (SHA256) verified by install.sh; previous release kept for rollback. Docker on the Pi: NO (armv6 pain, too heavy). kubusd headless, no GUI.
 - deployment dev + console: Docker (docker compose). console is the only web app; it runs on Steven's server.
