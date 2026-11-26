@@ -164,12 +164,18 @@ function cubeInputs(idx) {
     const spec = cube.cubes[ci];
     const bright = spec && spec.params.brightness != null ? spec.params.brightness : 1;
     const speed = spec && spec.params.speed != null ? spec.params.speed : 1;
+    const color = spec && spec.params.colors && spec.params.colors[0]
+      ? spec.params.colors[0] : [255, 255, 255];
+    const hex = '#' + color.slice(0,3).map(v => Math.round(v).toString(16).padStart(2,'0')).join('');
     rows += `<div class="cube-row" data-cube="${ci}">
       <span class="cube-label">cube ${ci+1}</span>
       <select onchange="onPrim(${idx},${ci},this)">
         <option value="">(keep)</option>
         ${PRIMITIVES.map(p=>`<option value="${p}" ${spec&&spec.primitive===p?'selected':''}>${p}</option>`).join('')}
       </select>
+      <span class="color-wrap" title="color (used by static, pulse, sine, strobe, ...)">
+        <input type="color" value="${hex}" oninput="onColor(${idx},${ci},this)">
+      </span>
       <span class="slider-wrap" title="brightness: 0 = off, 1 = full">
         <input type="range" min="0" max="1" step="0.05" value="${bright}"
                oninput="onBright(${idx},${ci},this)">
@@ -199,6 +205,7 @@ function renderEditor() {
       <div class="cube-head">
         <span class="cube-label">cube</span>
         <span>primitive</span>
+        <span class="color-wrap">color</span>
         <span class="slider-wrap">brightness</span>
         <span class="slider-wrap">speed</span>
       </div>
@@ -216,7 +223,16 @@ function stepsJson() {
 
 function onPrim(i, ci, sel) {
   if (!sel.value) { steps[i].cubes[ci] = null; }
-  else { steps[i].cubes[ci] = { primitive: sel.value, params: {} }; }
+  else { steps[i].cubes[ci] = { primitive: sel.value,
+                                params: { brightness: 1.0, speed: 1.0 } }; }
+  renderEditor();  // refresh sliders/color to the new primitive's defaults
+}
+function onColor(i, ci, inp) {
+  const spec = steps[i].cubes[ci];
+  if (!spec) return;
+  const h = inp.value.slice(1);
+  const rgb = [0, 2, 4].map(k => parseInt(h.slice(k, k+2), 16));
+  spec.params.colors = [rgb];
 }
 function onBright(i, ci, inp) {
   const spec = steps[i].cubes[ci];
@@ -338,12 +354,15 @@ vizLoop();
         transition: background 0.08s linear; }
 .step-card { border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px; }
 .step-head { display:flex; gap:10px; align-items:center; margin-bottom:8px; }
-.cube-head, .cube-row { display:grid; grid-template-columns: 64px 110px 1fr 1fr;
+.cube-head, .cube-row { display:grid; grid-template-columns: 64px 110px 44px 1fr 1fr;
                         gap:10px; align-items:center; margin-bottom:6px; }
 .cube-head { color:var(--muted); font-size:12px; text-transform:uppercase;
              letter-spacing:.03em; margin-bottom:4px; }
 .cube-label { color:var(--muted); font-size:13px; }
 .cube-row select { width:100%; margin:0; }
+.color-wrap { display:flex; align-items:center; justify-content:center; }
+.color-wrap input[type=color] { width:100%; height:28px; padding:0; border:1px solid var(--border);
+                                border-radius:4px; background:none; cursor:pointer; }
 .slider-wrap { display:flex; align-items:center; gap:8px; }
 .slider-wrap input[type=range] { flex:1 1 auto; min-width:0; margin:0; }
 .slider-val { font-size:12px; color:var(--muted); min-width:2.4em; text-align:right; }
