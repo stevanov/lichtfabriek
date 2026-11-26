@@ -208,3 +208,74 @@ def test_offset_shifts_phase():
     lit1 = [prim_knight(t, {"speed": 1.0, "offset": 0.5})[0] > 0 for t in on_times]
     assert lit0 != lit1, "half-cycle offset should flip the knight flash"
     assert any(a_ and not b_ for a_, b_ in zip(lit0, lit1)), "cubes must be out of phase"
+
+
+def test_offset_full_cycle_is_noop():
+    """offset=1.0 must reproduce offset=0.0 for every primitive (full cycle)."""
+    import math
+    from kubusd.engine import prim_pulse, prim_random, prim_knight, prim_fire
+    cols = [[255, 0, 0], [0, 255, 0], [0, 0, 255]]
+
+    def close(a, b):
+        return all(math.isclose(x, y, rel_tol=1e-9, abs_tol=1e-9)
+                   for x, y in zip(a, b))
+
+    for t in (0.1, 0.7, 1.3):
+        assert close(prim_pulse(t, {"speed": 1.0, "offset": 0.0, "colors": cols}),
+                     prim_pulse(t, {"speed": 1.0, "offset": 1.0, "colors": cols}))
+        assert close(prim_random(t, {"speed": 1.0, "offset": 0.0}),
+                     prim_random(t, {"speed": 1.0, "offset": 1.0}))
+        assert close(prim_fire(t, {"speed": 1.0, "offset": 0.0}),
+                     prim_fire(t, {"speed": 1.0, "offset": 1.0}))
+        assert close(prim_knight(t, {"speed": 1.0, "offset": 0.0}),
+                     prim_knight(t, {"speed": 1.0, "offset": 1.0}))
+
+
+def test_chase_frequency_capped():
+    """V14: chase must not flash faster than a 3 Hz strobe at the same speed
+    (argon #1: the old quarter-phase chase doubled the flash rate)."""
+    from kubusd.engine import prim_chase, prim_strobe
+
+    def transitions(prim, speed):
+        prev, n = None, 0
+        for i in range(600):  # 6 s at 100 Hz
+            c = prim(i / 100.0, {"speed": speed})
+            on = c[0] > 0
+            if prev is not None and on != prev:
+                n += 1
+            prev = on
+        return n
+
+    chase_n = transitions(prim_chase, 3.0)
+    strobe_n = transitions(prim_strobe, 3.0)
+    # a 3 Hz strobe = 3 on/off pairs per second = ~36 transitions in 6 s
+    assert strobe_n <= 37, f"strobe baseline broken: {strobe_n}"
+    assert chase_n <= strobe_n + 1, (
+        f"chase flashes faster than strobe at the same speed: {chase_n} vs {strobe_n}")
+
+
+def test_chase_offset_changes_phase():
+    """offset=0.5 must actually anti-phase chase (was a no-op before, argon #1)."""
+    from kubusd.engine import prim_chase
+    times = [0.1, 0.3, 0.5, 0.7]
+    a = [prim_chase(t, {"speed": 1.0, "offset": 0.0})[0] > 0 for t in times]
+    b = [prim_chase(t, {"speed": 1.0, "offset": 0.5})[0] > 0 for t in times]
+    assert a != b, "half-cycle offset should shift the chase flash"
+
+
+def test_fire_and_random_respond_to_speed():
+    """fire/random are not strobe-clamped: higher speed = faster change (argon #2)."""
+    from kubusd.engine import prim_fire, prim_random
+
+    def changes(prim, speed):
+        prev, n = None, 0
+        for i in range(400):  # 4 s at 100 Hz
+            c = prim(i / 100.0, {"speed": speed})
+            key = tuple(round(x, 2) for x in c)
+            if prev is not None and key != prev:
+                n += 1
+            prev = key
+        return n
+
+    assert changes(prim_fire, 3.0) > changes(prim_fire, 0.5)
+    assert changes(prim_random, 3.0) > changes(prim_random, 0.5)

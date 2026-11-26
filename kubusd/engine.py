@@ -79,9 +79,10 @@ def prim_rainbow(t: float, params: dict) -> list[float]:
 
 def prim_pulse(t: float, params: dict) -> list[float]:
     speed = params.get("speed", 1.0)
-    ts = _shifted(t, params, _period(1.0, speed))
     colors = params.get("colors") or [[255, 0, 0], [0, 255, 0], [0, 0, 255]]
     period = _period(1.0, speed)
+    # offset is a fraction of the FULL palette cycle (one color step per period)
+    ts = _shifted(t, params, len(colors) * period)
     color = colors[int(ts / max(period, 0.01)) % len(colors)]
     phase = _t_strobed(ts, 1.0, speed)
     amp = 0.5 + 0.5 * math.sin(phase * 2 * math.pi)
@@ -91,10 +92,13 @@ def prim_pulse(t: float, params: dict) -> list[float]:
 
 def prim_fade(t: float, params: dict) -> list[float]:
     speed = params.get("speed", 1.0)
-    ts = _shifted(t, params, _period(0.5, speed))
+    # smooth color blend, NOT a flash: no strobe clamp on its cycle (V14 caps
+    # flashing, not smooth fades)
+    cycle = 0.5 / max(speed, 0.01)
+    ts = _shifted(t, params, cycle)
     colors = params.get("colors") or [[255, 0, 0], [0, 255, 0], [0, 0, 255]]
     n = len(colors)
-    phase = _t_strobed(ts, 0.5, speed)
+    phase = (ts % cycle) / cycle
     idx = int(phase * n)
     nxt = (idx + 1) % n
     frac = (phase * n) - idx
@@ -106,12 +110,14 @@ def prim_fade(t: float, params: dict) -> list[float]:
 
 
 def prim_chase(t: float, params: dict) -> list[float]:
-    # on a single cube, chase = blinking at the strobe-capped rate
+    # chase = ONE blink per strobe-capped period (V14: never > 3 Hz); the
+    # "chase" across cubes comes from per-cube offsets. (A quarter-phase
+    # pattern here would double the flash rate and make offset=0.5 a no-op.)
     speed = params.get("speed", 1.0)
-    ts = _shifted(t, params, _period(0.8, speed))
+    cycle = _period(0.8, speed)
+    ts = _shifted(t, params, cycle)
     colors = params.get("colors") or [[255, 255, 255]]
-    step = _t_strobed(ts, 0.8, speed)
-    on = bool(int(step * 4) % 2)
+    on = _t_strobed(ts, 0.8, speed) < 0.5
     base = _color01(colors[0])
     return _apply_brightness([c if on else 0.0 for c in base],
                              params.get("brightness", 1.0))
@@ -138,11 +144,13 @@ def prim_off(t: float, params: dict) -> list[float]:
 # ---- alpha2 primitives (T16) ----
 
 def prim_random(t: float, params: dict) -> list[float]:
-    """Random color that changes at a strobe-capped rate (seeded per instance)."""
+    """Random color that changes at its own rate (no strobe clamp: color jumps,
+    not flashing — V14 caps flashing only)."""
     speed = params.get("speed", 1.0)
     seed = params.get("seed", 0)
-    cycle = _period(0.5, speed)
-    rnd = random.Random(seed + int(_shifted(t, params, cycle) / max(cycle, 0.01)))
+    cycle = 0.5 / max(speed, 0.01)
+    ts = t + (params.get("offset", 0.0) % 1.0) * cycle
+    rnd = random.Random(seed + int(ts / max(cycle, 0.01)))
     return _apply_brightness([rnd.random(), rnd.random(), rnd.random()],
                              params.get("brightness", 1.0))
 
@@ -151,8 +159,9 @@ def prim_fire(t: float, params: dict) -> list[float]:
     """Flickering warm fire: orange-red with fast random intensity variation."""
     speed = params.get("speed", 1.0)
     seed = params.get("seed", 0)
-    cycle = _period(0.3, speed)
-    rnd = random.Random(seed + int(_shifted(t, params, cycle) / max(cycle, 0.01) * 10))
+    cycle = 0.3 / max(speed, 0.01)  # smooth flicker, not a flash: no clamp
+    ts = t + (params.get("offset", 0.0) % 1.0) * cycle
+    rnd = random.Random(seed + int(ts / max(cycle, 0.01) * 10))
     flicker = 0.6 + 0.4 * rnd.random()
     return _apply_brightness(
         [1.0 * flicker, 0.35 * flicker, 0.05 * flicker],
@@ -169,8 +178,8 @@ def prim_sparkle(t: float, params: dict) -> list[float]:
     color from the palette (or from params.colors when 2+ given)."""
     speed = params.get("speed", 1.0)
     seed = params.get("seed", 0)
-    cycle = _period(0.7, speed)
-    ts = _shifted(t, params, cycle)
+    cycle = _period(0.7, speed)  # flash-like: stays strobe-capped (V14)
+    ts = t + (params.get("offset", 0.0) % 1.0) * cycle
     colors = params.get("colors")
     palette = colors if colors and len(colors) >= 2 else SPARKLE_PALETTE
     rnd = random.Random(seed + int(ts / max(cycle, 0.01)))

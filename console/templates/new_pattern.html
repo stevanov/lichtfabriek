@@ -120,21 +120,24 @@ const PRIMS = {
   huesweep: (t,p) => { const c=1/rate(p.speed??1,0.2); const [r,g,b]=hsv(shift(t,p,c)*rate(p.speed??1,0.2)%1,1,1); return bright([r,g,b], p.brightness??1); },
   pulse: (t,p) => {
     const cols = p.colors||[[255,0,0],[0,255,0],[0,0,255]];
-    const cyc = periodOf(1.0, p.speed??1), ts = shift(t,p,cyc);
     const per = periodOf(1.0, p.speed??1);
+    const ts = shift(t,p, cols.length*per);  // offset: full palette cycle
     const col = cols[Math.floor(ts/Math.max(per,0.01)) % cols.length];
     const ph = strobeBase(ts, 1.0, p.speed??1), amp = 0.5+0.5*Math.sin(ph*2*Math.PI);
     return bright(c01(col).map(x=>x*amp), p.brightness??1);
   },
   fade: (t,p) => {
     const cols = p.colors||[[255,0,0],[0,255,0],[0,0,255]];
-    const n=cols.length, ph=strobeBase(shift(t,p,periodOf(0.5,p.speed??1)),0.5,p.speed??1);
+    const cyc = 0.5/Math.max(p.speed??1,0.01);   // smooth blend: no clamp
+    const ts = shift(t,p,cyc), ph=(ts%cyc)/cyc;
+    const n=cols.length;
     const i=Math.floor(ph*n)%n, j=(i+1)%n, f=(ph*n)-i;
     const a=c01(cols[i]), b=c01(cols[j]);
     return bright([a[0]*(1-f)+b[0]*f, a[1]*(1-f)+b[1]*f, a[2]*(1-f)+b[2]*f], p.brightness??1);
   },
   chase: (t,p) => {
-    const on = Math.floor(strobeBase(shift(t,p,periodOf(0.8,p.speed??1)),0.8,p.speed??1)*4)%2===0;
+    const cyc = periodOf(0.8,p.speed??1);
+    const on = strobeBase(shift(t,p,cyc),0.8,p.speed??1)<0.5;  // 1 blink/period (V14)
     const c = c01((p.colors||[[255,255,255]])[0]);
     return bright(c.map(x=>on?x:0), p.brightness??1);
   },
@@ -144,22 +147,25 @@ const PRIMS = {
     return bright([warm, warm*0.9, warm*0.4], p.brightness??1);
   },
   random: (t,p) => {
-    const cyc = periodOf(0.5, p.speed??1);
-    const seed = Math.floor(shift(t,p,cyc)/Math.max(cyc,0.01));
+    const cyc = 0.5/Math.max(p.speed??1,0.01);   // no strobe clamp (color jumps)
+    const ts = t + ((p.offset??0)%1)*cyc;
+    const seed = Math.floor(ts/Math.max(cyc,0.01));
     let x = (seed*9301+49297)%233280;
     const r=()=>{ x=(x*9301+49297)%233280; return x/233280; };
     return bright([r(),r(),r()], p.brightness??1);
   },
   fire: (t,p) => {
-    const cyc = periodOf(0.3, p.speed??1);
-    const seed = Math.floor(shift(t,p,cyc)/Math.max(cyc,0.01)*10);
+    const cyc = 0.3/Math.max(p.speed??1,0.01);   // smooth flicker: no clamp
+    const ts = t + ((p.offset??0)%1)*cyc;
+    const seed = Math.floor(ts/Math.max(cyc,0.01)*10);
     let x=(seed*9301+49297)%233280; const r=()=>{x=(x*9301+49297)%233280;return x/233280;};
     const f=0.6+0.4*r();
     return bright([f, f*0.35, f*0.05], p.brightness??1);
   },
   sparkle: (t,p) => {
-    const cyc = periodOf(0.7, p.speed??1);
-    const seed = Math.floor(shift(t,p,cyc)/Math.max(cyc,0.01));
+    const cyc = periodOf(0.7, p.speed??1);   // flash-like: strobe-capped
+    const ts = t + ((p.offset??0)%1)*cyc;
+    const seed = Math.floor(ts/Math.max(cyc,0.01));
     let x=(seed*9301+49297)%233280; const r=()=>{x=(x*9301+49297)%233280;return x/233280;};
     const pal = (p.colors && p.colors.length>=2) ? p.colors
       : [[255,255,255],[255,0,0],[0,0,255],[255,255,0],[0,255,0]];
@@ -216,6 +222,7 @@ function cubeInputs(idx) {
       ? spec.params.colors[0] : [255, 255, 255];
     const hex = '#' + color.slice(0,3).map(v => Math.round(v).toString(16).padStart(2,'0')).join('');
     const useColor = spec && ONE_COLOR.has(spec.primitive);
+    const dis = spec ? '' : 'disabled';  // (keep) rows have nothing to tune
     rows += `<div class="cube-row" data-cube="${ci}">
       <span class="cube-label">cube ${ci+1}</span>
       <select onchange="onPrim(${idx},${ci},this)">
@@ -226,17 +233,17 @@ function cubeInputs(idx) {
         <input type="color" value="${hex}" ${useColor ? '' : 'disabled'} oninput="onColor(${idx},${ci},this)">
       </span>
       <span class="slider-wrap" title="brightness: 0 = off, 1 = full">
-        <input type="range" min="0" max="1" step="0.05" value="${bright}"
+        <input type="range" min="0" max="1" step="0.05" value="${bright}" ${dis}
                oninput="onBright(${idx},${ci},this)">
         <output class="slider-val">${bright}</output>
       </span>
       <span class="slider-wrap" title="speed: 0.1 = slow, 3 = fast">
-        <input type="range" min="0.1" max="3" step="0.1" value="${speed}"
+        <input type="range" min="0.1" max="3" step="0.1" value="${speed}" ${dis}
                oninput="onSpeed(${idx},${ci},this)">
         <output class="slider-val">${speed}</output>
       </span>
       <span class="slider-wrap" title="offset: phase shift as a fraction of one animation cycle (0 = in sync; 0.5 = half a cycle out of phase; stagger cubes e.g. 0 / 0.33 / 0.66 for a sweep)">
-        <input type="range" min="0" max="1" step="0.01" value="${offset}"
+        <input type="range" min="0" max="1" step="0.01" value="${offset}" ${dis}
                oninput="onOffset(${idx},${ci},this)">
         <output class="slider-val">${offset}</output>
       </span>
@@ -324,7 +331,6 @@ document.getElementById('add-step').onclick = () => {
 };
 
 // ---- visualizer (T19): run the sequence live ----
-let cubeState = [{p:'off',params:{}},{p:'off',params:{}},{p:'off',params:{}}];
 let t0 = performance.now()/1000;
 
 // Sign hammer geometry (SPEC §C): the hammer pivots around the BOTTOM end of
@@ -364,20 +370,22 @@ function applyVisual(t) {
   const seq = stepsJson();
   const total = seq.reduce((a,s)=>a+s.duration_s,0) || 1;
   let tt = t % total;
+  // simulate persistence from off across steps up to tt (V21): a cube not
+  // named in a step keeps the previous step's primitive
+  const st = [{p:'off',params:{}},{p:'off',params:{}},{p:'off',params:{}}];
+  let rem = tt, tIn = 0;
   for (const s of seq) {
-    if (tt < s.duration_s) {
-      const tIn = tt;
-      for (let ci=0; ci<3; ci++) {
-        const spec = s.cubes[ci];
-        if (spec && spec.primitive) cubeState[ci] = {p:spec.primitive, params:spec.params||{}};
-        const st = cubeState[ci];
-        const color = (PRIMS[st.p]||PRIMS.off)(tIn, st.params);
-        document.getElementById('cube'+ci).style.background =
-          `rgb(${Math.round(color[0]*255)},${Math.round(color[1]*255)},${Math.round(color[2]*255)})`;
-      }
-      break;
+    for (let ci=0; ci<3; ci++) {
+      const spec = s.cubes[ci];
+      if (spec && spec.primitive) st[ci] = {p:spec.primitive, params:spec.params||{}};
     }
-    tt -= s.duration_s;
+    if (rem < s.duration_s) { tIn = rem; break; }
+    rem -= s.duration_s;
+  }
+  for (let ci=0; ci<3; ci++) {
+    const color = (PRIMS[st[ci].p]||PRIMS.off)(tIn, st[ci].params);
+    document.getElementById('cube'+ci).style.background =
+      `rgb(${Math.round(color[0]*255)},${Math.round(color[1]*255)},${Math.round(color[2]*255)})`;
   }
 }
 

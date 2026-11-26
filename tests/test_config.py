@@ -61,3 +61,30 @@ def test_validate_rejects_placeholder_admin_password():
         assert False, "placeholder ADMIN_PASSWORD should raise"
     except ValueError:
         pass
+
+
+def test_validate_rejects_env_example_placeholder_admin_password():
+    """The .env.example placeholder must not pass validate (argon review #3)."""
+    from console.config import Config as ConsoleConfig
+
+    os.environ["PAYLOAD_KEY"] = "x"
+    os.environ["SECRET_KEY"] = "real-secret-value"
+    os.environ["ADMIN_PASSWORD"] = "change-me-on-first-deploy"  # old placeholder
+    cfg = ConsoleConfig()
+    try:
+        cfg.validate()
+        assert False, "placeholder ADMIN_PASSWORD should raise"
+    except ValueError:
+        pass
+
+
+def test_sim_cols_read_from_env():
+    """SIM_COLS documented in .env.example must actually be read (argon #6)."""
+    from kubusd.config import Config
+    import json as _json
+
+    os.environ["PAYLOAD_KEY"] = "x"
+    os.environ["SIM_COLS"] = "42"
+    cfg = Config.from_env(None)
+    assert cfg.sim_cols == 42
+    del os.environ["SIM_COLS"]
