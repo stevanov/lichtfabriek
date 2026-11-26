@@ -126,8 +126,11 @@ const PRIMS = {
   sparkle: (t,p) => {
     const seed = Math.floor(t/Math.max(periodOf(0.7, p.speed??1),0.01));
     let x=(seed*9301+49297)%233280; const r=()=>{x=(x*9301+49297)%233280;return x/233280;};
-    const c = c01((p.colors||[[255,255,255]])[0]);
-    return bright(c.map(v=>r()<0.2?v:0), p.brightness??1);
+    const pal = (p.colors && p.colors.length>=2) ? p.colors
+      : [[255,255,255],[255,0,0],[0,0,255],[255,255,0],[0,255,0]];
+    const on = r()<0.2;
+    const c = c01(pal[Math.floor(r()*pal.length)%pal.length]);
+    return bright(c.map(v=>on?v:0), p.brightness??1);
   },
   sine: (t,p) => {
     const cols=p.colors||[[255,0,0],[0,0,255]];
@@ -158,10 +161,11 @@ const PRIMS = {
 let steps = [{ duration_s: 5, cubes: {0:{primitive:'rainbow',params:{}},1:null,2:null} }];
 
 // primitives that use exactly ONE color -> the color picker is meaningful.
-// multi-color (pulse/fade/sine/police) and hue-based/fixed (rainbow, holiday,
-// random, fire, huesweep, off) primitives ignore a single `colors[0]` or would
-// break on it, so the picker stays disabled for them (engine defaults apply).
-const ONE_COLOR = new Set(['static', 'strobe', 'sparkle', 'chase', 'knight']);
+// multi-color (sparkle/pulse/fade/sine/police) and hue-based/fixed (rainbow,
+// holiday, random, fire, huesweep, off) primitives ignore a single
+// `colors[0]` or would break on it, so the picker stays disabled for them
+// (engine defaults apply).
+const ONE_COLOR = new Set(['static', 'strobe', 'chase', 'knight']);
 
 function cubeInputs(idx) {
   const cube = steps[idx];
@@ -180,7 +184,7 @@ function cubeInputs(idx) {
         <option value="">(keep)</option>
         ${PRIMITIVES.map(p=>`<option value="${p}" ${spec&&spec.primitive===p?'selected':''}>${p}</option>`).join('')}
       </select>
-      <span class="color-wrap" title="${useColor ? 'color (single-color primitive)' : 'color picker only for single-color primitives (static, strobe, sparkle, chase, knight)'}">
+      <span class="color-wrap" title="${useColor ? 'color (single-color primitive)' : 'color picker only for single-color primitives (static, strobe, chase, knight)'}">
         <input type="color" value="${hex}" ${useColor ? '' : 'disabled'} oninput="onColor(${idx},${ci},this)">
       </span>
       <span class="slider-wrap" title="brightness: 0 = off, 1 = full">

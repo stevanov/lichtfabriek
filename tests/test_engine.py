@@ -132,6 +132,21 @@ def test_static_dim():
     assert abs(f.strips[0][0] - 0.5) < 0.05
 
 
+def test_sparkle_is_multicolor():
+    """Sparkle flashes in RANDOM colors from the palette, not one fixed color."""
+    from kubusd.engine import prim_sparkle
+
+    seen = set()
+    for i in range(2000):
+        c = prim_sparkle(i / 100.0, {"speed": 2.0})
+        if c[0] > 0 or c[1] > 0 or c[2] > 0:  # a lit flash
+            seen.add((round(c[0], 2), round(c[1], 2), round(c[2], 2)))
+    assert len(seen) >= 3, f"sparkle should show multiple colors, saw {len(seen)}"
+    # and at least one non-white color appears (default palette is colorful)
+    non_white = [c for c in seen if c != (1.0, 1.0, 1.0)]
+    assert non_white, "sparkle should include non-white colors"
+
+
 def test_speed_uniform_multiplier():
     """`speed` means the same for every primitive: 1 = normal, 2 = faster,
     0.5 = slower (SPEC §C). Rate-based primitives advance hue faster with

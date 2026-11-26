@@ -143,14 +143,21 @@ def prim_fire(t: float, params: dict) -> list[float]:
         params.get("brightness", 1.0))
 
 
+# default multi-color palette for sparkle (each flash picks one at random)
+SPARKLE_PALETTE = [[255, 255, 255], [255, 0, 0], [0, 0, 255],
+                   [255, 255, 0], [0, 255, 0]]
+
+
 def prim_sparkle(t: float, params: dict) -> list[float]:
-    """Twinkling white/color sparkle: mostly dark, brief bright flashes."""
+    """Multi-color twinkle: mostly dark, brief flashes, each flash a RANDOM
+    color from the palette (or from params.colors when 2+ given)."""
     speed = params.get("speed", 1.0)
     seed = params.get("seed", 0)
+    colors = params.get("colors")
+    palette = colors if colors and len(colors) >= 2 else SPARKLE_PALETTE
     rnd = random.Random(seed + int(t / max(_period(0.7, speed), 0.01)))
-    colors = params.get("colors") or [[255, 255, 255]]
     on = rnd.random() < 0.2
-    base = _color01(colors[0])
+    base = _color01(palette[int(rnd.random() * len(palette)) % len(palette)])
     return _apply_brightness([c if on else 0.0 for c in base],
                              params.get("brightness", 1.0))
 
