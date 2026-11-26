@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}New pattern — Lichtfabriek{% endblock %}
+{% block content %}
+<div class="panel" style="max-width:560px;">
+  <h1>New pattern</h1>
+  <p class="muted">Publishing activates the pattern on the cubes immediately.
+  Admins can revoke it afterwards.</p>
+  <form method="post">
+    <label>Title</label>
+    <input name="title" placeholder="e.g. Sinterklaas 2026" required>
+    <label>Description</label>
+    <textarea name="description" rows="2" placeholder="What it looks like, when to use it"></textarea>
+    <label>Primitive</label>
+    <select name="primitive">
+      {% for p in primitives %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+    </select>
+    <div class="row">
+      <div><label>Speed (0.01–20, strobe &lt; 3 Hz)</label>
+        <input name="speed" type="number" step="0.1" min="0.01" max="20" value="1"></div>
+      <div><label>Brightness (0–1)</label>
+        <input name="brightness" type="number" step="0.05" min="0" max="1" value="1"></div>
+    </div>
+    <label>Colors (r,g,b;r,g,b;…, optional)</label>
+    <input name="colors" placeholder="e.g. 255,0,0;0,255,0">
+    <button type="submit">Publish</button>
+  </form>
+</div>
+{% endblock %}

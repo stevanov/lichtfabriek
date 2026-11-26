@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Admin — Lichtfabriek{% endblock %}
+{% block content %}
+<h1>Admin</h1>
+
+<div class="panel">
+  <h2>Users</h2>
+  <table>
+    <tr><th>Username</th><th>Admin</th><th>Banned</th><th>Actions</th></tr>
+    {% for u in users %}
+    <tr>
+      <td>{{ u.username }}</td>
+      <td>{% if u.is_admin %}yes{% else %}no{% endif %}</td>
+      <td>{% if u.banned %}yes{% else %}no{% endif %}</td>
+      <td>
+        {% if u.username != 'admin' %}
+          {% if u.banned %}
+          <form method="post" action="{{ url_for('admin_users') }}" style="display:inline">
+            <input type="hidden" name="action" value="unban">
+            <input type="hidden" name="username" value="{{ u.username }}">
+            <button type="submit" class="secondary">Unban</button>
+          </form>
+          {% else %}
+          <form method="post" action="{{ url_for('admin_users') }}" style="display:inline">
+            <input type="hidden" name="action" value="ban">
+            <input type="hidden" name="username" value="{{ u.username }}">
+            <button type="submit" class="secondary">Ban</button>
+          </form>
+          {% endif %}
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  <h3>Create user</h3>
+  <form method="post" action="{{ url_for('admin_users') }}" style="max-width:420px">
+    <input type="hidden" name="action" value="create">
+    <input name="username" placeholder="Username" required>
+    <input name="password" type="password" placeholder="Password (>= 8 chars)" required>
+    <label style="display:flex;gap:8px;align-items:center;">
+      <input type="checkbox" name="is_admin" style="width:auto"> Admin
+    </label>
+    <button type="submit">Create user</button>
+  </form>
+</div>
+
+<div class="panel">
+  <h2>Sign control (admin only, V18)</h2>
+  <div class="row">
+    <form method="post" action="{{ url_for('admin_sign') }}">
+      <input type="hidden" name="action" value="sign_on">
+      <button type="submit">Sign on</button>
+    </form>
+    <form method="post" action="{{ url_for('admin_sign') }}">
+      <input type="hidden" name="action" value="sign_off">
+      <button type="submit" class="secondary">Sign off</button>
+    </form>
+  </div>
+  <h3>Schedule</h3>
+  <form method="post" action="{{ url_for('admin_sign') }}" style="max-width:420px">
+    <input type="hidden" name="action" value="schedule">
+    <div class="row">
+      <div><label>Start (HH:MM)</label><input name="start" value="18:00"></div>
+      <div><label>Stop (HH:MM)</label><input name="stop" value="23:00"></div>
+    </div>
+    <label style="display:flex;gap:8px;align-items:center;">
+      <input type="checkbox" name="enabled" checked style="width:auto"> Schedule enabled
+    </label>
+    <button type="submit">Publish schedule</button>
+  </form>
+</div>
+
+<div class="panel">
+  <h2>Audit log</h2>
+  <table>
+    <tr><th>Time</th><th>Actor</th><th>Action</th><th>Detail</th><th>IP</th></tr>
+    {% for a in audit %}
+    <tr>
+      <td class="muted">{{ a.ts | int | ctime }}</td>
+      <td>{{ a.actor }}</td>
+      <td>{{ a.action }}</td>
+      <td>{{ a.detail }}</td>
+      <td class="muted">{{ a.ip }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

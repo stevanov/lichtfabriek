@@ -1,0 +1,4 @@
+# kubusd runtime deps (installed by deploy/install.sh on the Pi)
+paho-mqtt>=1.6
+pynacl>=1.5
+# pigpio is a system package on the Pi (apt install pigpio), not pip.

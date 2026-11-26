@@ -1,0 +1,22 @@
+[Unit]
+Description=Lichtfabriek kubusd (Pi daemon)
+After=network.target pigpiod.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__KUBUSD_USER__
+Group=__KUBUSD_USER__
+WorkingDirectory=__KUBUSD_INSTALL_DIR__
+EnvironmentFile=__KUBUSD_ENV_FILE__
+ExecStart=__KUBUSD_PYTHON__ -m kubusd run --config __KUBUSD_ENV_FILE__
+Restart=always
+RestartSec=5
+WatchdogSec=60
+# SD-card friendly (V16): no core dumps
+LimitCORE=0
+# kubusd talks to pigpiod over its socket, no root needed
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

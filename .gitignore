@@ -5,3 +5,11 @@ __pycache__/
 *.egg-info/
 dist/
 .env
+.pytest_cache/
+data/
+*.db
+*.corrupt*
+
+# Git worktrees (any name containing "worktrees" — Claude, opencode, etc.)
+*worktrees*/
+.worktrees*
