@@ -155,15 +155,24 @@ function cubeInputs(idx) {
   let rows = '';
   for (let ci=0; ci<3; ci++) {
     const spec = cube.cubes[ci];
+    const bright = spec && spec.params.brightness != null ? spec.params.brightness : 1;
+    const speed = spec && spec.params.speed != null ? spec.params.speed : 1;
     rows += `<div class="cube-row" data-cube="${ci}">
-      <label class="cube-label">cube ${ci+1}</label>
+      <span class="cube-label">cube ${ci+1}</span>
       <select onchange="onPrim(${idx},${ci},this)">
         <option value="">(keep)</option>
         ${PRIMITIVES.map(p=>`<option value="${p}" ${spec&&spec.primitive===p?'selected':''}>${p}</option>`).join('')}
       </select>
-      <input type="number" step="0.1" min="0" max="1" value="${spec?spec.params.brightness??1:1}"
-             placeholder="bright" title="brightness 0-1" style="width:80px"
-             oninput="onBright(${idx},${ci},this)">
+      <span class="slider-wrap" title="brightness: 0 = off, 1 = full">
+        <input type="range" min="0" max="1" step="0.05" value="${bright}"
+               oninput="onBright(${idx},${ci},this)">
+        <output class="slider-val">${bright}</output>
+      </span>
+      <span class="slider-wrap" title="speed: 0.1 = slow, 3 = fast">
+        <input type="range" min="0.1" max="3" step="0.1" value="${speed}"
+               oninput="onSpeed(${idx},${ci},this)">
+        <output class="slider-val">${speed}</output>
+      </span>
     </div>`;
   }
   return rows;
@@ -179,6 +188,12 @@ function renderEditor() {
         <input type="number" step="0.5" min="0.5" value="${s.duration_s}" style="width:80px"
                oninput="onDur(${i},this)">
         <button type="button" class="secondary" onclick="rmStep(${i})">×</button>
+      </div>
+      <div class="cube-head">
+        <span class="cube-label">cube</span>
+        <span>primitive</span>
+        <span class="slider-wrap">brightness</span>
+        <span class="slider-wrap">speed</span>
       </div>
       ${cubeInputs(i)}
     </div>`).join('');
@@ -199,6 +214,14 @@ function onPrim(i, ci, sel) {
 function onBright(i, ci, inp) {
   const spec = steps[i].cubes[ci];
   if (spec) spec.params.brightness = +inp.value;
+  const out = inp.closest('.slider-wrap').querySelector('.slider-val');
+  if (out) out.textContent = inp.value;
+}
+function onSpeed(i, ci, inp) {
+  const spec = steps[i].cubes[ci];
+  if (spec) spec.params.speed = +inp.value;
+  const out = inp.closest('.slider-wrap').querySelector('.slider-val');
+  if (out) out.textContent = inp.value;
 }
 function onDur(i, inp) { steps[i].duration_s = +inp.value; }
 function rmStep(i) { steps.splice(i,1); if(!steps.length) steps=[{duration_s:5,cubes:{0:{primitive:'rainbow',params:{}},1:null,2:null}}]; renderEditor(); }
@@ -308,8 +331,14 @@ vizLoop();
         transition: background 0.08s linear; }
 .step-card { border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px; }
 .step-head { display:flex; gap:10px; align-items:center; margin-bottom:8px; }
-.cube-row { display:flex; gap:10px; align-items:center; margin-bottom:6px; }
-.cube-label { width:60px; color:var(--muted); font-size:13px; }
-.cube-row select { width:auto; margin:0; }
+.cube-head, .cube-row { display:grid; grid-template-columns: 64px 110px 1fr 1fr;
+                        gap:10px; align-items:center; margin-bottom:6px; }
+.cube-head { color:var(--muted); font-size:12px; text-transform:uppercase;
+             letter-spacing:.03em; margin-bottom:4px; }
+.cube-label { color:var(--muted); font-size:13px; }
+.cube-row select { width:100%; margin:0; }
+.slider-wrap { display:flex; align-items:center; gap:8px; }
+.slider-wrap input[type=range] { flex:1 1 auto; min-width:0; margin:0; }
+.slider-val { font-size:12px; color:var(--muted); min-width:2.4em; text-align:right; }
 </style>
 {% endblock %}
