@@ -125,3 +125,59 @@ def test_admin_required(client):
     client.post("/login", data={"username": "carl", "password": "carlpass123"})
     r = client.get("/admin")
     assert r.status_code == 403
+
+
+def test_activate_pattern(client, monkeypatch):
+    _bootstrap_admin()
+    client.post("/login", data={"username": "admin", "password": "admin-password"})
+    client.post("/change-password", data={"password": "adminpass123",
+                                          "password2": "adminpass123"})
+    calls = []
+
+    def fake_publish(msg, retain=True):
+        calls.append(msg)
+        return 1
+
+    monkeypatch.setattr("console.app.publisher.publish_pattern", fake_publish)
+    # create a pattern directly in the DB (with hash) then activate
+    db.add_pattern("pid1", "hash1", "Title", "desc", "admin", "127.0.0.1",
+                   "rainbow", {"speed": 1.0, "brightness": 0.5})
+    r = client.post("/patterns/pid1/activate", follow_redirects=True)
+    assert b"activated" in r.data
+    assert calls and calls[0]["pattern_hash"] == "hash1"
+
+
+def test_activate_old_pattern_without_hash(client, monkeypatch):
+    # regression: rows migrated without a hash must still activate (hash fallback)
+    _bootstrap_admin()
+    client.post("/login", data={"username": "admin", "password": "admin-password"})
+    client.post("/change-password", data={"password": "adminpass123",
+                                          "password2": "adminpass123"})
+    calls = []
+    monkeypatch.setattr("console.app.publisher.publish_pattern",
+                        lambda msg, retain=True: calls.append(msg) or 1)
+    db.conn.execute(
+        "INSERT INTO patterns (pattern_id, pattern_hash, title, creator, "
+        "created_ts, posting_ip, primitive, params) "
+        "VALUES ('old1','','T','a',1,'1.2.3.4','pulse','{}')")
+    db.conn.commit()
+    r = client.post("/patterns/old1/activate", follow_redirects=True)
+    assert b"activated" in r.data
+    assert calls and calls[0]["pattern_hash"]  # fallback hash generated
+
+
+def test_activate_without_broker_no_500(client, monkeypatch):
+    _bootstrap_admin()
+    client.post("/login", data={"username": "admin", "password": "admin-password"})
+    client.post("/change-password", data={"password": "adminpass123",
+                                          "password2": "adminpass123"})
+    db.add_pattern("pid2", "hash2", "T2", "", "admin", "127.0.0.1",
+                   "rainbow", {"speed": 1.0})
+
+    def boom(msg, retain=True):
+        raise ConnectionError("broker down")
+
+    monkeypatch.setattr("console.app.publisher.publish_pattern", boom)
+    r = client.post("/patterns/pid2/activate", follow_redirects=True)
+    assert r.status_code == 200
+    assert b"MQTT publish failed" in r.data

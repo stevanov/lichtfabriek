@@ -53,6 +53,7 @@ class ConsoleDB:
             CREATE TABLE IF NOT EXISTS patterns (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 pattern_id TEXT UNIQUE NOT NULL,
+                pattern_hash TEXT NOT NULL DEFAULT '',
                 title TEXT NOT NULL,
                 description TEXT NOT NULL DEFAULT '',
                 creator TEXT NOT NULL,
@@ -76,6 +77,11 @@ class ConsoleDB:
             );
             """
         )
+        # migration: older DBs lack pattern_hash
+        cols = {r[1] for r in self.conn.execute("PRAGMA table_info(patterns)")}
+        if "pattern_hash" not in cols:
+            self.conn.execute(
+                "ALTER TABLE patterns ADD COLUMN pattern_hash TEXT NOT NULL DEFAULT ''")
         self.conn.commit()
 
     # ---- users (V11: admin-created only) ----
@@ -123,15 +129,15 @@ class ConsoleDB:
 
     # ---- patterns (V6) ----
 
-    def add_pattern(self, pattern_id: str, title: str, description: str,
-                    creator: str, posting_ip: str, primitive: str,
-                    params: dict) -> None:
+    def add_pattern(self, pattern_id: str, pattern_hash: str, title: str,
+                    description: str, creator: str, posting_ip: str,
+                    primitive: str, params: dict) -> None:
         import json
 
         self._execute(
-            "INSERT INTO patterns (pattern_id, title, description, creator, "
-            "created_ts, posting_ip, primitive, params) VALUES (?,?,?,?,?,?,?,?)",
-            (pattern_id, title, description, creator, time.time(),
+            "INSERT INTO patterns (pattern_id, pattern_hash, title, description, creator, "
+            "created_ts, posting_ip, primitive, params) VALUES (?,?,?,?,?,?,?,?,?)",
+            (pattern_id, pattern_hash, title, description, creator, time.time(),
              posting_ip, primitive, json.dumps(params)),
         )
 

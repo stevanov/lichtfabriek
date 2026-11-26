@@ -187,8 +187,8 @@ def _publish(request) -> redirect:
         flash(f"Invalid pattern: {e}", "error")
         return redirect(url_for("new_pattern"))
     # V19: IP + creator stay in console DB, never in the payload
-    db.add_pattern(pattern_id, title or pattern_id, description,
-                   session["user"], ip, primitive, params)
+    db.add_pattern(pattern_id, msg["pattern_hash"], title or pattern_id,
+                   description, session["user"], ip, primitive, params)
     try:
         counter = publisher.publish_pattern(msg)
     except (ConnectionError, Exception) as e:  # noqa: BLE001
@@ -211,11 +211,16 @@ def activate(pattern_id: str):
     ip = _client_ip()
     msg = {
         "pattern_id": p["pattern_id"],
-        "pattern_hash": p["pattern_hash"],
+        "pattern_hash": p["pattern_hash"] or secrets.token_hex(8),
         "primitive": p["primitive"],
         "params": p["params"],
     }
-    publisher.publish_pattern(msg)
+    try:
+        publisher.publish_pattern(msg)
+    except Exception as e:  # noqa: BLE001
+        db.audit(session["user"], "activate_failed", f"{pattern_id}: {e}", ip)
+        flash(f"MQTT publish failed: {e}", "error")
+        return redirect(url_for("patterns"))
     db.set_active(pattern_id)
     db.audit(session["user"], "activate", pattern_id, ip)
     flash(f"Pattern {p['title']} activated.", "ok")
@@ -230,7 +235,12 @@ def revoke():
     ip = _client_ip()
     msg = {"pattern_id": "default", "pattern_hash": "default",
            "primitive": "off", "params": {}}
-    publisher.publish_pattern(msg, retain=True)
+    try:
+        publisher.publish_pattern(msg, retain=True)
+    except Exception as e:  # noqa: BLE001
+        db.audit(session["user"], "revoke_failed", str(e), ip)
+        flash(f"MQTT publish failed: {e}", "error")
+        return redirect(url_for("patterns"))
     db.clear_active()
     db.audit(session["user"], "revoke", "all patterns off", ip)
     flash("All patterns revoked (default show).", "ok")
@@ -280,27 +290,31 @@ def admin_sign():
     # V18: sign/schedule messages are console-admin only
     ip = _client_ip()
     action = request.form.get("action")
-    if action == "sign_on":
-        publisher.publish_sign_set(True)
-        db.audit(session["user"], "sign_set", "on", ip)
-        flash("Sign manually on (override, expires in 1 h).", "ok")
-    elif action == "sign_off":
-        publisher.publish_sign_set(False)
-        db.audit(session["user"], "sign_set", "off", ip)
-        flash("Sign manually off (override, expires in 1 h).", "ok")
-    elif action == "schedule":
-        start = request.form.get("start", "18:00")
-        stop = request.form.get("stop", "23:00")
-        enabled = "enabled" in request.form
-        schedule = {"enabled": enabled, "start": start, "stop": stop}
-        try:
-            schema.validate_sign_schedule({"schedule": schedule})
-        except ValueError as e:
-            flash(f"Invalid schedule: {e}", "error")
-            return redirect(url_for("admin"))
-        publisher.publish_sign_schedule(schedule)
-        db.audit(session["user"], "sign_schedule", str(schedule), ip)
-        flash("Schedule published.", "ok")
+    try:
+        if action == "sign_on":
+            publisher.publish_sign_set(True)
+            db.audit(session["user"], "sign_set", "on", ip)
+            flash("Sign manually on (override, expires in 1 h).", "ok")
+        elif action == "sign_off":
+            publisher.publish_sign_set(False)
+            db.audit(session["user"], "sign_set", "off", ip)
+            flash("Sign manually off (override, expires in 1 h).", "ok")
+        elif action == "schedule":
+            start = request.form.get("start", "18:00")
+            stop = request.form.get("stop", "23:00")
+            enabled = "enabled" in request.form
+            schedule = {"enabled": enabled, "start": start, "stop": stop}
+            try:
+                schema.validate_sign_schedule({"schedule": schedule})
+            except ValueError as e:
+                flash(f"Invalid schedule: {e}", "error")
+                return redirect(url_for("admin"))
+            publisher.publish_sign_schedule(schedule)
+            db.audit(session["user"], "sign_schedule", str(schedule), ip)
+            flash("Schedule published.", "ok")
+    except Exception as e:  # noqa: BLE001
+        db.audit(session["user"], "sign_publish_failed", str(e), ip)
+        flash(f"MQTT publish failed: {e}", "error")
     return redirect(url_for("admin"))
 
 
