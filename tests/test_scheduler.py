@@ -39,7 +39,7 @@ def test_loop_sequence():
     s = sign_sequence(now=0.5)
     assert s == [True, True, False, False, False]
     # 2) mid-swing ~45°
-    s = sign_sequence(now=RAISE_DURATION + 0.5)
+    s = sign_sequence(now=RAISE_DURATION + 0.25)
     assert s == [True, False, True, False, False]
     # 3) impact pose (head on anvil), no sparks yet
     s = sign_sequence(now=IMPACT_START + 0.1)

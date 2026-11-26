@@ -208,9 +208,10 @@ function applyVisual(t) {
           `rgb(${Math.round(color[0]*255)},${Math.round(color[1]*255)},${Math.round(color[2]*255)})`;
       }
       // sign: fixed hammer loop (mirror scheduler.py, SPEC §C):
-      // raised → mid-swing → impact → impact+sparks → impact(no sparks) → loop
-      const cyc = tIn % 8.0;
-      const RAISE = 3.0, SWING = 1.0, IMPACT = 0.5, SPARK = 1.0;
+      // raised → mid-swing → impact → impact+sparks → impact(no sparks)
+      // → JUMP back to raised. Cycle ≈3s; board never goes dark.
+      const cyc = tIn % 3.0;
+      const RAISE = 1.2, SWING = 0.5, IMPACT = 0.4, SPARK = 0.5;
       const impStart = RAISE + SWING, sparkStart = impStart + IMPACT;
       document.getElementById('sign-anvil').classList.add('on'); // always on
       document.getElementById('sign-s1').classList.toggle('on', cyc < RAISE);
