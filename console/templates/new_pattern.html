@@ -8,19 +8,37 @@
   their previous step's look (first step = off). Publishing activates it on
   the cubes immediately.</p>
 
-  <div id="viz" class="viz" style="margin:16px 0;">
-    <div class="viz-cubes">
-      <div class="cube" id="cube0">cube 1</div>
-      <div class="cube" id="cube1">cube 2</div>
-      <div class="cube" id="cube2">cube 3</div>
+  <div id="viz" class="viz">
+    <div class="viz-sign-block">
+      <div class="viz-board" title="LED sign board (SPEC §C)">
+        <svg class="hammer-svg" viewBox="0 0 380 530" role="img" aria-hidden="true">
+          <rect x="40" y="20" width="160" height="170" fill="#111"/>
+          <path d="M70 128 L190 128 L190 140 L155 146 L165 172 L185 172 L185 182 L85 182 L85 172 L105 172 L115 146 L90 140 Z"
+                fill="none" stroke="#cfe8f5" stroke-width="1.5" stroke-linejoin="round"/>
+          <g id="hammer-g">
+            <line x1="170" y1="118" x2="170" y2="66" stroke="#cfe8f5" stroke-width="1.5"/>
+            <rect x="156" y="50" width="28" height="18" fill="none" stroke="#cfe8f5" stroke-width="1.5"/>
+          </g>
+          <g id="spark-g" style="opacity:0" stroke="#ffd98a" stroke-width="1.5" stroke-linecap="round">
+            <line x1="100" y1="112" x2="88" y2="98"/>
+            <line x1="106" y1="110" x2="102" y2="92"/>
+            <line x1="94" y1="114" x2="80" y2="106"/>
+          </g>
+        </svg>
+      </div>
+      <div class="viz-sign">
+        <span class="sign-lamp" id="sign-anvil" title="anvil — always on">▲</span>
+        <span class="sign-lamp" id="sign-s1" title="hammer raised">1</span>
+        <span class="sign-lamp" id="sign-s2" title="hammer mid-swing">2</span>
+        <span class="sign-lamp" id="sign-s3" title="hammer impact">3</span>
+        <span class="sign-lamp" id="sign-spark" title="sparks">✦</span>
+        <span class="muted">sign</span>
+      </div>
     </div>
-    <div class="viz-sign">
-      <span class="sign-lamp" id="sign-anvil" title="anvil">▲</span>
-      <span class="sign-lamp" id="sign-s1">■</span>
-      <span class="sign-lamp" id="sign-s2">■</span>
-      <span class="sign-lamp" id="sign-s3">■</span>
-      <span class="sign-lamp" id="sign-spark">✦</span>
-      <span class="muted">sign</span>
+    <div class="viz-cubes">
+      <div class="cube" id="cube2">cube 3</div>
+      <div class="cube" id="cube1">cube 2</div>
+      <div class="cube" id="cube0">cube 1</div>
     </div>
   </div>
 
@@ -192,7 +210,40 @@ document.getElementById('add-step').onclick = () => {
 let cubeState = [{p:'off',params:{}},{p:'off',params:{}},{p:'off',params:{}}];
 let t0 = performance.now()/1000;
 
+// Sign hammer geometry (SPEC §C): the hammer pivots around the BOTTOM end of
+// its handle (SVG point 170,118, right side of the anvil top); the head is
+// the upper end and swings counterclockwise from straight up to pointing
+// left. Rotation is stepped (jumps, no in-between frames) around that pivot.
+const SIGN_PIVOT = [170, 118];
+
+function updateSign(t) {
+  // fixed hammer loop (mirror kubusd/scheduler.py):
+  // raised → mid-swing → impact → impact+sparks → impact(no sparks)
+  // → JUMP back to raised. Cycle ≈3s; board never goes dark.
+  const cyc = t % 3.0;
+  const RAISE = 1.2, SWING = 0.5, IMPACT = 0.4, SPARK = 0.5;
+  const impStart = RAISE + SWING, sparkStart = impStart + IMPACT;
+  const on = id => document.getElementById(id).classList;
+  on('sign-anvil').add('on'); // always on
+  on('sign-s1').toggle('on', cyc < RAISE);
+  on('sign-s2').toggle('on', cyc >= RAISE && cyc < impStart);
+  on('sign-s3').toggle('on', cyc >= impStart);
+  const sparking = cyc >= sparkStart && cyc < sparkStart + SPARK;
+  on('sign-spark').toggle('on', sparking);
+
+  // animate the SVG hammer: 0° raised, −45° mid-swing, −90° impact (pointing
+  // left), snapped — no gradual lift (matches scheduler step behaviour)
+  let deg = 0;
+  if (cyc >= RAISE && cyc < impStart) deg = -45;
+  else if (cyc >= impStart) deg = -90;
+  const hg = document.getElementById('hammer-g');
+  if (hg) hg.setAttribute('transform', `rotate(${deg} ${SIGN_PIVOT[0]} ${SIGN_PIVOT[1]})`);
+  const sg = document.getElementById('spark-g');
+  if (sg) sg.style.opacity = sparking ? '1' : '0';
+}
+
 function applyVisual(t) {
+  updateSign(t);  // sign runs on its own clock, independent of cube steps
   const seq = stepsJson();
   const total = seq.reduce((a,s)=>a+s.duration_s,0) || 1;
   let tt = t % total;
@@ -207,17 +258,6 @@ function applyVisual(t) {
         document.getElementById('cube'+ci).style.background =
           `rgb(${Math.round(color[0]*255)},${Math.round(color[1]*255)},${Math.round(color[2]*255)})`;
       }
-      // sign: fixed hammer loop (mirror scheduler.py, SPEC §C):
-      // raised → mid-swing → impact → impact+sparks → impact(no sparks)
-      // → JUMP back to raised. Cycle ≈3s; board never goes dark.
-      const cyc = tIn % 3.0;
-      const RAISE = 1.2, SWING = 0.5, IMPACT = 0.4, SPARK = 0.5;
-      const impStart = RAISE + SWING, sparkStart = impStart + IMPACT;
-      document.getElementById('sign-anvil').classList.add('on'); // always on
-      document.getElementById('sign-s1').classList.toggle('on', cyc < RAISE);
-      document.getElementById('sign-s2').classList.toggle('on', cyc >= RAISE && cyc < impStart);
-      document.getElementById('sign-s3').classList.toggle('on', cyc >= impStart);
-      document.getElementById('sign-spark').classList.toggle('on', cyc >= sparkStart && cyc < sparkStart + SPARK);
       break;
     }
     tt -= s.duration_s;
@@ -241,15 +281,26 @@ vizLoop();
 </script>
 
 <style>
-.viz-cubes { display:flex; gap:16px; justify-content:center; margin-bottom:12px; }
-.cube { width:110px; height:110px; border-radius:12px; background:#111;
-        color:#fff; display:flex; align-items:flex-end; justify-content:center;
-        padding-bottom:6px; font-size:12px; border:1px solid var(--border);
-        transition: background 0.08s linear; }
+/* visualizer layout (docs/sign-layout.svg): sign/LED board on top,
+   cubes stacked vertically on the right */
+.viz { display:flex; gap:28px; align-items:flex-start; justify-content:center;
+       margin:16px 0; }
+.viz-sign-block { display:flex; flex-direction:column; align-items:center; gap:10px; }
+.viz-board { background:#000; border:1px solid var(--border); border-radius:10px;
+             padding:8px; }
+.hammer-svg { width:200px; height:auto; display:block; }
+#hammer-g { transition: transform 0.05s linear; }
+#spark-g { transition: opacity 0.05s linear; }
 .viz-sign { display:flex; gap:8px; align-items:center; justify-content:center; }
 .sign-lamp { width:34px; height:34px; border-radius:50%; background:#222; color:#666;
-             display:flex; align-items:center; justify-content:center; font-size:16px; }
+             display:flex; align-items:center; justify-content:center; font-size:14px;
+             font-weight:700; }
 .sign-lamp.on { background:#ffdd66; color:#222; }
+.viz-cubes { display:flex; flex-direction:column; gap:10px; }
+.cube { width:130px; height:64px; border-radius:10px; background:#111;
+        color:#fff; display:flex; align-items:center; justify-content:center;
+        font-size:13px; border:1px solid var(--border);
+        transition: background 0.08s linear; }
 .step-card { border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px; }
 .step-head { display:flex; gap:10px; align-items:center; margin-bottom:8px; }
 .cube-row { display:flex; gap:10px; align-items:center; margin-bottom:6px; }

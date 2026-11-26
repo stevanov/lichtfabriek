@@ -60,7 +60,16 @@ class PigpioOutput(BaseOutput):
 
 
 class SimulatorOutput(BaseOutput):
-    """ANSI terminal render of strips + sign (V4). No hardware needed."""
+    """ANSI terminal render (V4) that mirrors the physical layout
+    (`docs/sign-layout.svg`): the 5 sign LED outputs (hammer + sparks) run
+    across the top, and the 3 cube strips are stacked vertically on the
+    right of the screen. No hardware needed."""
+
+    # per-output LED colours (matches docs/sign-layout.svg): hammer = light
+    # blue, sparks = warm amber, anvil = cool white
+    SIGN_LEDS = ("anvil", "raised", "swing", "impact", "sparks")
+    SIGN_COLORS = ((230, 230, 230), (207, 232, 245), (207, 232, 245),
+                   (207, 232, 245), (255, 217, 138))
 
     def __init__(self, cols: int = 60, width: int = 12):
         self.cols = cols
@@ -71,21 +80,41 @@ class SimulatorOutput(BaseOutput):
     def _esc(c: tuple) -> str:
         return f"\x1b[48;2;{int(c[0])};{int(c[1])};{int(c[2])}m"
 
-    def set_frame(self, frame) -> None:
+    def _render(self, frame) -> list[str]:
         ints = frame.as_ints()
-        # three strip rows (reuse space, rewrite in place when possible)
-        for i, color in enumerate(ints):
-            block = self._esc(color) + " " * self.width + "\x1b[0m"
-            row = f"cube{i} {block}  " + "".join(
-                "\x1b[42m  \x1b[0m" if on else "  " for on in frame.sign
-            ) + "  sign"
-            if self._lines < 3:
-                print(row)
-                self._lines += 1
+        rows: list[str] = []
+
+        # ---- top: the 5 sign LED outputs (hammer loop, SPEC §C) ----
+        leds = []
+        for name, on, color in zip(self.SIGN_LEDS, frame.sign, self.SIGN_COLORS):
+            if on:
+                cell = self._esc(color) + "  " + "\x1b[0m"
             else:
-                # move cursor up 3 and rewrite
-                print(f"\x1b[3A\x1b[K{row}", end="\n")
-        time.sleep(0.03)  # keep the loop human-readable
+                cell = "\x1b[90m··\x1b[0m"
+            leds.append(f"{name} {cell}")
+        rows.append("  sign: " + "   ".join(leds))
+        rows.append("")
+
+        # ---- right side: 3 cubes stacked (cube 2 on top, 0 on bottom) ----
+        pad = max(self.cols - (self.width + 2), 2)
+        left = " " * pad
+        for i in (2, 1, 0):
+            color = ints[i]
+            inner = f"  cube {i} ".ljust(self.width)
+            rows.append(f"{left}┌{'─' * self.width}┐")
+            rows.append(f"{left}│{self._esc(color)}{inner}\x1b[0m│")
+            rows.append(f"{left}└{'─' * self.width}┘")
+        return rows
+
+    def set_frame(self, frame) -> None:
+        rows = self._render(frame)
+        if self._lines:
+            # move cursor back to the start of our block and rewrite in place
+            print(f"\x1b[{self._lines}A", end="")
+        for row in rows:
+            print("\x1b[K" + row)
+        self._lines = len(rows)
+        time.sleep(0.05)  # keep the loop human-readable
 
     def close(self) -> None:
         pass
