@@ -49,6 +49,15 @@ cp console/.env.example console/.env
 
 Or with Docker: `docker compose up --build`.
 
+## Notes for contributors
+
+Initial build (grill + spec + scaffold + both services, 2026-11-26) was written
+by **DeepSeek V4 Flash 0731** (deepseek/deepseek-v4-flash-0731) in the OpenCode
+harness, with design reviewed by GHCE models (gpt-6-luna, claude-sonnet-5.5).
+Not all code is original: verify any `from shared` imports and the deploy
+scripts against the SPEC before trusting them blindly. See `AGENTS.md` for how
+to work in this repo.
+
 ## Install on the Pi
 
 ```bash
