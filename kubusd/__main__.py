@@ -16,6 +16,18 @@ def _setup_logging(level: str) -> None:
     )
 
 
+def _is_off_steps(steps) -> bool:
+    """True when every step is just 'off' for every cube (used for resume)."""
+    if not steps:
+        return True
+    for step in steps:
+        for ci in ("0", "1", "2"):
+            spec = step.get("cubes", {}).get(ci)
+            if spec and spec.get("primitive") != "off":
+                return False
+    return True
+
+
 def _load_cfg(args) -> "Config":
     from kubusd.config import Config
 
@@ -45,8 +57,8 @@ def cmd_run(args) -> int:
         active = db.get_active_pattern()
         db.prune_expired()
         active = db.get_active_pattern()
-        if active and active["primitive"] != "off":
-            engine.set_pattern(active["primitive"], active["params"])
+        if active and not _is_off_steps(active.get("steps")):
+            engine.set_pattern(active["steps"])
             logging.getLogger("kubusd").info(
                 "resumed last-good pattern %s", active["pattern_id"])
         else:
@@ -88,8 +100,8 @@ def cmd_sim(args) -> int:
     mqtt = MQTTClient(cfg, db, engine, output)
     scheduler = SignScheduler(cfg, db, output)
     active = db.get_active_pattern()
-    if active and active["primitive"] != "off":
-        engine.set_pattern(active["primitive"], active["params"])
+    if active and not _is_off_steps(active.get("steps")):
+        engine.set_pattern(active["steps"])
     else:
         engine.set_pattern("rainbow", {"speed": 0.5, "brightness": 0.6})
     engine.start()

@@ -127,10 +127,14 @@ class MQTTClient:
             self._apply_control(msg)
 
     def _apply_pattern(self, msg: dict) -> None:
+        from shared.schema import normalize_pattern
+
+        normalized = normalize_pattern(msg)
         ttl = msg.get("params", {}).get("ttl")
         self.db.set_active_pattern(msg, ttl=ttl)
-        self.engine.set_pattern(msg["primitive"], msg["params"])
-        log.info("pattern %s -> %s", msg["pattern_id"], msg["primitive"])
+        self.engine.set_pattern(normalized["steps"])
+        log.info("pattern %s -> %d steps",
+                 msg["pattern_id"], len(normalized["steps"]))
 
     def _apply_sign_set(self, msg: dict) -> None:
         self.db.set_sign_state("sign_override", "1" if msg["on"] else "0")

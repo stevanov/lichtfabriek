@@ -14,7 +14,23 @@ def test_roundtrip_pattern(tmp_path):
     db.set_active_pattern(msg)
     active = db.get_active_pattern()
     assert active["pattern_id"] == "p1"
-    assert active["primitive"] == "rainbow"
+    assert active["steps"], "normalized to steps"
+    assert active["steps"][0]["cubes"]["0"]["primitive"] == "rainbow"
+    db.close()
+
+
+def test_roundtrip_steps_pattern(tmp_path):
+    db = DB(str(tmp_path / "test.db"))
+    msg = {
+        "pattern_id": "p2", "pattern_hash": "h2",
+        "steps": [
+            {"duration_s": 3.0, "cubes": {"0": {"primitive": "rainbow", "params": {}}}},
+            {"duration_s": 2.0, "cubes": {"1": {"primitive": "static", "params": {}}}},
+        ],
+    }
+    db.set_active_pattern(msg)
+    active = db.get_active_pattern()
+    assert len(active["steps"]) == 2
     db.close()
 
 
