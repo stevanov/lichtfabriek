@@ -157,6 +157,12 @@ const PRIMS = {
 // ---- step model in the editor ----
 let steps = [{ duration_s: 5, cubes: {0:{primitive:'rainbow',params:{}},1:null,2:null} }];
 
+// primitives that use exactly ONE color -> the color picker is meaningful.
+// multi-color (pulse/fade/sine/police) and hue-based/fixed (rainbow, holiday,
+// random, fire, huesweep, off) primitives ignore a single `colors[0]` or would
+// break on it, so the picker stays disabled for them (engine defaults apply).
+const ONE_COLOR = new Set(['static', 'strobe', 'sparkle', 'chase', 'knight']);
+
 function cubeInputs(idx) {
   const cube = steps[idx];
   let rows = '';
@@ -167,14 +173,15 @@ function cubeInputs(idx) {
     const color = spec && spec.params.colors && spec.params.colors[0]
       ? spec.params.colors[0] : [255, 255, 255];
     const hex = '#' + color.slice(0,3).map(v => Math.round(v).toString(16).padStart(2,'0')).join('');
+    const useColor = spec && ONE_COLOR.has(spec.primitive);
     rows += `<div class="cube-row" data-cube="${ci}">
       <span class="cube-label">cube ${ci+1}</span>
       <select onchange="onPrim(${idx},${ci},this)">
         <option value="">(keep)</option>
         ${PRIMITIVES.map(p=>`<option value="${p}" ${spec&&spec.primitive===p?'selected':''}>${p}</option>`).join('')}
       </select>
-      <span class="color-wrap" title="color (used by static, pulse, sine, strobe, ...)">
-        <input type="color" value="${hex}" oninput="onColor(${idx},${ci},this)">
+      <span class="color-wrap" title="${useColor ? 'color (single-color primitive)' : 'color picker only for single-color primitives (static, strobe, sparkle, chase, knight)'}">
+        <input type="color" value="${hex}" ${useColor ? '' : 'disabled'} oninput="onColor(${idx},${ci},this)">
       </span>
       <span class="slider-wrap" title="brightness: 0 = off, 1 = full">
         <input type="range" min="0" max="1" step="0.05" value="${bright}"
@@ -225,8 +232,12 @@ function onPrim(i, ci, sel) {
   if (!sel.value) { steps[i].cubes[ci] = null; }
   else {
     const prev = steps[i].cubes[ci] && steps[i].cubes[ci].params || {};
-    // keep the cube's existing speed/brightness/color when switching primitive
+    // keep the cube's existing speed/brightness when switching primitive
     const params = { brightness: 1.0, speed: 1.0, ...prev };
+    if (!ONE_COLOR.has(sel.value)) {
+      // multi-color / hue-based primitives use their own color sets
+      delete params.colors;
+    }
     steps[i].cubes[ci] = { primitive: sel.value, params };
   }
   renderEditor();  // refresh sliders/color to the new primitive's defaults
@@ -367,6 +378,7 @@ vizLoop();
 .color-wrap { display:flex; align-items:center; justify-content:center; }
 .color-wrap input[type=color] { width:100%; height:28px; padding:0; border:1px solid var(--border);
                                 border-radius:4px; background:none; cursor:pointer; }
+.color-wrap input[type=color]:disabled { opacity:.25; cursor:not-allowed; }
 .slider-wrap { display:flex; align-items:center; gap:8px; }
 .slider-wrap input[type=range] { flex:1 1 auto; min-width:0; margin:0; }
 .slider-val { font-size:12px; color:var(--muted); min-width:2.4em; text-align:right; }
