@@ -61,6 +61,32 @@
   </div>
 </div>
 
+<div class="panel" style="max-width:960px; margin-top:16px;">
+  <h2>Primitive reference</h2>
+  <p class="muted">What each primitive does, and which controls apply.</p>
+  <table class="prim-table">
+    <tr><th>primitive</th><th>what it does</th><th>color</th><th>brightness</th><th>speed</th></tr>
+    <tr><td><strong>static</strong></td><td>A single fixed color, stays on.</td><td class="y">yes</td><td class="y">yes</td><td class="n">—</td></tr>
+    <tr><td><strong>rainbow</strong></td><td>Continuously cycles through all hues (the classic rainbow).</td><td class="n">—</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>pulse</strong></td><td>Breathing effect: steps through colors, each gently pulsing in intensity.</td><td class="n">built-in</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>fade</strong></td><td>Smoothly fades from one color to the next and back.</td><td class="n">built-in</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>chase</strong></td><td>Flashing chase effect (blinks on a single cube; sweeps in a sequence).</td><td class="y">yes</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>holiday</strong></td><td>Warm festive glow that gently breathes (reddish-gold).</td><td class="n">built-in</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>random</strong></td><td>Jumps to a new random color at a steady rate.</td><td class="n">—</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>fire</strong></td><td>Flickering orange-red like a real flame.</td><td class="n">—</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>sparkle</strong></td><td>Mostly dark, with brief flashes in random colors (twinkle).</td><td class="n">random</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>huesweep</strong></td><td>Slow, smooth sweep through the color wheel.</td><td class="n">—</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>sine</strong></td><td>Smooth oscillation between two colors (red ↔ blue by default).</td><td class="n">built-in</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>strobe</strong></td><td>Hard on/off strobe of your chosen color (capped below 3&nbsp;Hz).</td><td class="y">yes</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>police</strong></td><td>Alternating red ↔ blue, like an emergency light.</td><td class="n">built-in</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>knight</strong></td><td>Knight-Rider style scanning light (blinks on one cube; sweeps across cubes in a sequence).</td><td class="y">yes</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td><strong>off</strong></td><td>Turns the cube off (black).</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+  </table>
+  <p class="muted">• <strong>color</strong>: your chosen color (single-color primitives).
+  • <strong>brightness</strong> 0–1, <strong>speed</strong> 1&nbsp;=&nbsp;normal, 2&nbsp;=&nbsp;twice as fast, 0.5&nbsp;=&nbsp;half speed.
+  • <strong>built-in</strong> = the primitive uses its own fixed palette.</p>
+</div>
+
 <script>
 const PRIMITIVES = {{ primitives | tojson }};
 
@@ -386,5 +412,11 @@ vizLoop();
 .slider-wrap { display:flex; align-items:center; gap:8px; }
 .slider-wrap input[type=range] { flex:1 1 auto; min-width:0; margin:0; }
 .slider-val { font-size:12px; color:var(--muted); min-width:2.4em; text-align:right; }
+.prim-table { width:100%; border-collapse:collapse; margin-top:8px; }
+.prim-table th, .prim-table td { text-align:left; padding:5px 10px; border-bottom:1px solid var(--border);
+                                 vertical-align:top; }
+.prim-table th { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
+.prim-table td.y { color:#3c9; font-weight:600; }
+.prim-table td.n { color:var(--muted); }
 </style>
 {% endblock %}
