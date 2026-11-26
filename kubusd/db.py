@@ -66,6 +66,10 @@ class DB:
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS counters (
+                topic TEXT PRIMARY KEY,
+                counter INTEGER NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS audit (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ts REAL NOT NULL,
@@ -75,6 +79,55 @@ class DB:
             );
             """
         )
+        self.conn.commit()
+        self._migrate_legacy_patterns()
+
+    def _migrate_legacy_patterns(self) -> None:
+        """alpha1 stored primitive/params in `patterns`; alpha2 uses `steps`.
+
+        Rebuild the table when the old schema is found, converting each legacy
+        row to canonical steps (review 2026-11-26: a pre-alpha2 DB used to
+        crash kubusd at startup with 'no such column: steps')."""
+        cols = {r[1] for r in self.conn.execute("PRAGMA table_info(patterns)")}
+        if not cols or "steps" in cols:
+            return
+        import json
+
+        from shared.schema import normalize_pattern
+
+        rows = self.conn.execute(
+            "SELECT pattern_id, pattern_hash, primitive, params, "
+            "created_ts, ttl, active FROM patterns").fetchall()
+        self.conn.execute("ALTER TABLE patterns RENAME TO patterns_legacy")
+        self.conn.executescript(
+            """
+            CREATE TABLE patterns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pattern_id TEXT NOT NULL,
+                pattern_hash TEXT NOT NULL,
+                steps TEXT NOT NULL,
+                created_ts REAL NOT NULL,
+                ttl REAL,
+                active INTEGER NOT NULL DEFAULT 0
+            );
+            """
+        )
+        for pid, phash, primitive, params, created, ttl, active in rows:
+            try:
+                msg = {"pattern_id": pid, "pattern_hash": phash,
+                       "primitive": primitive,
+                       "params": json.loads(params or "{}")}
+                steps = json.dumps(normalize_pattern(msg)["steps"])
+            except (ValueError, TypeError):
+                continue  # unmigratable row: drop it, default show applies
+            # old ttl was relative to creation -> absolute expiry
+            expires = created + ttl if (ttl is not None and ttl < 1e6) else ttl
+            self.conn.execute(
+                "INSERT INTO patterns (pattern_id, pattern_hash, steps, "
+                "created_ts, ttl, active) VALUES (?,?,?,?,?,?)",
+                (pid, phash, steps, created, expires, active),
+            )
+        self.conn.execute("DROP TABLE patterns_legacy")
         self.conn.commit()
 
     # ---- patterns (V3, V15) ----
@@ -102,6 +155,9 @@ class DB:
         from shared.schema import normalize_pattern
 
         normalized = normalize_pattern(msg)
+        # ttl arrives as RELATIVE seconds from the message; store an ABSOLUTE
+        # expiry so prune_expired compares like with like (review 2026-11-26)
+        expires = (time.time() + ttl) if ttl is not None else None
         self.conn.execute(
             "UPDATE patterns SET active=0 WHERE active=1"
         )
@@ -110,22 +166,33 @@ class DB:
             "created_ts, ttl, active) VALUES (?,?,?,?,?,1)",
             (
                 normalized["pattern_id"], normalized["pattern_hash"],
-                json.dumps(normalized["steps"]), time.time(), ttl,
+                json.dumps(normalized["steps"]), time.time(), expires,
             ),
         )
         self.conn.commit()
 
-    def revoke_active(self) -> None:
-        """Revoke = clear active pattern; caller starts default show (V15)."""
-        self.conn.execute("UPDATE patterns SET active=0 WHERE active=1")
-        self.conn.commit()
-
-    def prune_expired(self, now: float | None = None) -> None:
-        """Drop patterns whose TTL has passed (V15)."""
+    def prune_expired(self, now: float | None = None) -> int:
+        """Deactivate patterns whose TTL has passed (V15). Returns the count."""
         now = time.time() if now is None else now
-        self.conn.execute(
+        cur = self.conn.execute(
             "UPDATE patterns SET active=0 WHERE active=1 AND ttl IS NOT NULL AND ttl < ?",
             (now,),
+        )
+        self.conn.commit()
+        return cur.rowcount
+
+    # ---- per-topic replay counters (V13, review 2026-11-26) ----
+
+    def get_counter(self, topic: str) -> int | None:
+        row = self.conn.execute(
+            "SELECT counter FROM counters WHERE topic=?", (topic,)).fetchone()
+        return row[0] if row else None
+
+    def set_counter(self, topic: str, counter: int) -> None:
+        self.conn.execute(
+            "INSERT INTO counters (topic, counter) VALUES (?,?) "
+            "ON CONFLICT(topic) DO UPDATE SET counter=excluded.counter",
+            (topic, counter),
         )
         self.conn.commit()
 

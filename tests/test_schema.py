@@ -65,10 +65,12 @@ def test_sign_schedule():
         schema.validate_sign_schedule({"schedule": {"start": "18-00"}})
 
 
-def test_control():
-    schema.validate_control({"cmd": "status"})
+def test_control_topic_removed():
+    """`lichtfabriek/control` was removed (review: its commands were silent
+    no-ops). It must no longer be a valid topic."""
+    assert "TOPIC_CONTROL" not in dir(schema)
     with pytest.raises(ValueError):
-        schema.validate_control({"cmd": "explode"})
+        schema.validate_for_topic("lichtfabriek/control", {"cmd": "status"})
 
 
 def test_dispatch_unknown_topic():
@@ -123,6 +125,42 @@ def test_bad_cube_key_rejected():
     msg = _steps_msg([{"duration_s": 2.0, "cubes": {"9": {"primitive": "off", "params": {}}}}])
     with pytest.raises(ValueError, match="cubes key"):
         schema.normalize_pattern(msg)
+
+
+def test_sine_needs_two_colors():
+    """A 1-color sine used to raise IndexError at render time and crash-loop
+    kubusd on resume (review finding) — now rejected at validation."""
+    steps = [{"duration_s": 2.0,
+              "cubes": {"0": {"primitive": "sine",
+                              "params": {"colors": [[255, 0, 0]]}}}}]
+    with pytest.raises(ValueError, match="at least 2"):
+        schema.normalize_pattern(_steps_msg(steps))
+    # two colors are fine
+    steps[0]["cubes"]["0"]["params"]["colors"] = [[255, 0, 0], [0, 0, 255]]
+    schema.normalize_pattern(_steps_msg(steps))
+
+
+def test_legacy_sine_one_color_rejected():
+    msg = {"pattern_id": "p", "pattern_hash": "h", "primitive": "sine",
+           "params": {"colors": [[255, 0, 0]]}}
+    with pytest.raises(ValueError, match="at least 2"):
+        schema.validate_pattern(msg)
+
+
+def test_seed_must_be_integer():
+    """A list/dict seed raises TypeError inside random.Random — reject it."""
+    for bad in ([1, 2], {"a": 1}, 1.5, True):
+        params = {"seed": bad}
+        msg = _steps_msg([{"duration_s": 2.0,
+                           "cubes": {"0": {"primitive": "random",
+                                           "params": params}}}])
+        with pytest.raises(ValueError, match="seed"):
+            schema.normalize_pattern(msg)
+    # a proper integer seed passes
+    ok = _steps_msg([{"duration_s": 2.0,
+                      "cubes": {"0": {"primitive": "random",
+                                      "params": {"seed": 42}}}}])
+    schema.normalize_pattern(ok)
 
 
 def test_null_cube_persist_allowed():

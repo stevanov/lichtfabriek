@@ -12,19 +12,37 @@ Each primitive is a pure function of time t (seconds) + params -> a color
 from __future__ import annotations
 
 import colorsys
+import logging
 import math
-import random
 import time
 
 from shared.schema import (
     LEGACY_STEP_DURATION,
     MAX_BRIGHTNESS,
-    MAX_STROBE_HZ,
+    MIN_STROBE_PERIOD,
     PRIMITIVES,
 )
 
 NUM_STRIPS = 3
 NUM_SIGN = 5
+
+
+class _LCG:
+    """Deterministic PRNG shared with the JS visualizer (V23 parity).
+
+    The JS mirror implements the same LCG (x = (x*9301+49297) % 233280), so
+    random/fire/sparkle/holiday render IDENTICALLY in the browser preview and
+    on the Pi (review 2026-11-26: the two sides used different RNGs and the
+    preview ignored params.seed)."""
+
+    __slots__ = ("x",)
+
+    def __init__(self, seed: int):
+        self.x = (int(seed) * 9301 + 49297) % 233280
+
+    def random(self) -> float:
+        self.x = (self.x * 9301 + 49297) % 233280
+        return self.x / 233280.0
 
 
 def _apply_brightness(color, brightness: float):
@@ -42,8 +60,8 @@ def _rate(speed: float, base: float) -> float:
 
 def _period(base: float, speed: float) -> float:
     """Effective period for strobe-like primitives = base ÷ speed multiplier,
-    clamped so the effective frequency stays < MAX_STROBE_HZ (V14)."""
-    return max(1.0 / MAX_STROBE_HZ, base / max(speed, 0.01))
+    clamped so the effective flash rate stays strictly < 3 Hz (V14)."""
+    return max(MIN_STROBE_PERIOD, base / max(speed, 0.01))
 
 
 def _t_strobed(t: float, base: float, speed: float) -> float:
@@ -125,10 +143,8 @@ def prim_chase(t: float, params: dict) -> list[float]:
 
 def prim_holiday(t: float, params: dict) -> list[float]:
     speed = params.get("speed", 1.0)
-    # phase uses t*0.5 -> effective cycle is 2x the base period
     ts = _shifted(t, params, 2.0 * _period(1.0, speed))
-    seed = params.get("seed", 0)
-    rnd = random.Random(seed)
+    rnd = _LCG(params.get("seed", 0))
     sparkle = 0.7 + 0.3 * rnd.random()
     phase = _t_strobed(ts * 0.5, 1.0, speed)
     warm = 0.5 + 0.5 * math.sin(phase * 2 * math.pi)
@@ -147,10 +163,9 @@ def prim_random(t: float, params: dict) -> list[float]:
     """Random color that changes at its own rate (no strobe clamp: color jumps,
     not flashing — V14 caps flashing only)."""
     speed = params.get("speed", 1.0)
-    seed = params.get("seed", 0)
     cycle = 0.5 / max(speed, 0.01)
     ts = t + (params.get("offset", 0.0) % 1.0) * cycle
-    rnd = random.Random(seed + int(ts / max(cycle, 0.01)))
+    rnd = _LCG(params.get("seed", 0) + int(ts / max(cycle, 0.01)))
     return _apply_brightness([rnd.random(), rnd.random(), rnd.random()],
                              params.get("brightness", 1.0))
 
@@ -158,10 +173,9 @@ def prim_random(t: float, params: dict) -> list[float]:
 def prim_fire(t: float, params: dict) -> list[float]:
     """Flickering warm fire: orange-red with fast random intensity variation."""
     speed = params.get("speed", 1.0)
-    seed = params.get("seed", 0)
     cycle = 0.3 / max(speed, 0.01)  # smooth flicker, not a flash: no clamp
     ts = t + (params.get("offset", 0.0) % 1.0) * cycle
-    rnd = random.Random(seed + int(ts / max(cycle, 0.01) * 10))
+    rnd = _LCG(params.get("seed", 0) + int(ts / max(cycle, 0.01) * 10))
     flicker = 0.6 + 0.4 * rnd.random()
     return _apply_brightness(
         [1.0 * flicker, 0.35 * flicker, 0.05 * flicker],
@@ -177,12 +191,11 @@ def prim_sparkle(t: float, params: dict) -> list[float]:
     """Multi-color twinkle: mostly dark, brief flashes, each flash a RANDOM
     color from the palette (or from params.colors when 2+ given)."""
     speed = params.get("speed", 1.0)
-    seed = params.get("seed", 0)
     cycle = _period(0.7, speed)  # flash-like: stays strobe-capped (V14)
     ts = t + (params.get("offset", 0.0) % 1.0) * cycle
     colors = params.get("colors")
     palette = colors if colors and len(colors) >= 2 else SPARKLE_PALETTE
-    rnd = random.Random(seed + int(ts / max(cycle, 0.01)))
+    rnd = _LCG(params.get("seed", 0) + int(ts / max(cycle, 0.01)))
     on = rnd.random() < 0.2
     base = _color01(palette[int(rnd.random() * len(palette)) % len(palette)])
     return _apply_brightness([c if on else 0.0 for c in base],
@@ -293,8 +306,7 @@ class Engine:
         self.steps: list[dict] = []  # canonical steps form
         self._running = False
         self._seq_t0 = 0.0
-        # per-cube persistent settings: (primitive, params) or None = off
-        self._cube_state: list[tuple[str, dict] | None] = [None] * NUM_STRIPS
+        self._render_errors = 0
 
     def set_pattern(self, primitive_or_steps, params=None) -> None:
         """Accept legacy (primitive, params) or canonical steps list."""
@@ -308,7 +320,6 @@ class Engine:
                    "steps": primitive_or_steps}
         normalized = normalize_pattern(msg)
         self.steps = normalized["steps"]
-        self._cube_state = [None] * NUM_STRIPS
         self._seq_t0 = time.monotonic()
 
     def start(self) -> None:
@@ -330,6 +341,22 @@ class Engine:
             tt -= s["duration_s"]
         return len(self.steps) - 1, tt
 
+    def _state_at(self, idx: int) -> list[tuple[str, dict] | None]:
+        """Per-cube state at the START of step `idx`, resolved by replaying
+        the sequence from off (V21).
+
+        Replay (instead of incremental mutation) keeps the result correct
+        across loop wraps and render stalls, and matches the JS preview
+        exactly (V23; review 2026-11-26)."""
+        state: list[tuple[str, dict] | None] = [None] * NUM_STRIPS
+        for step in self.steps[:idx + 1]:
+            cubes = step.get("cubes", {})
+            for ci in range(NUM_STRIPS):
+                spec = cubes.get(str(ci))
+                if spec is not None:
+                    state[ci] = (spec["primitive"], spec.get("params", {}))
+        return state
+
     def step(self, dt: float | None = None) -> Frame:
         """Advance one frame: compute per-cube colors from the current step."""
         if dt is None:
@@ -338,18 +365,26 @@ class Engine:
         if not self.steps:
             return Frame()
         idx, t_in = self._current_step(t)
-        step = self.steps[idx]
-        cubes = step.get("cubes", {})
+        state = self._state_at(idx)
+        cubes = self.steps[idx].get("cubes", {})
         frame = Frame()
+        log = logging.getLogger("kubusd.engine")
         for ci in range(NUM_STRIPS):
             spec = cubes.get(str(ci))
-            if spec is None:
-                # persist previous step's settings (V21); None = off
-                prim_name, prim_params = self._cube_state[ci] or ("off", {})
-            else:
+            if spec is not None:
                 prim_name = spec["primitive"]
                 prim_params = spec.get("params", {})
-                self._cube_state[ci] = (prim_name, prim_params)
+            else:
+                prim_name, prim_params = state[ci] or ("off", {})
             fn = PRIMITIVE_FUNCS.get(prim_name, prim_off)
-            frame.strips[ci] = fn(t_in, prim_params)
+            try:
+                frame.strips[ci] = fn(t_in, prim_params)
+            except Exception as e:  # noqa: BLE001 — a render error must never
+                # kill the loop (review 2026-11-26): validation makes this
+                # near-impossible, but a hostile pattern must not crash-loop
+                self._render_errors += 1
+                if self._render_errors <= 5 or self._render_errors % 100 == 0:
+                    log.warning("render error %s on cube %d: %s",
+                                prim_name, ci, e)
+                frame.strips[ci] = [0.0, 0.0, 0.0]
         return frame

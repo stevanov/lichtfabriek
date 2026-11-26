@@ -36,11 +36,12 @@ class Publisher:
         if self.cfg.mqtt_username:
             c.username_pw_set(self.cfg.mqtt_username, self.cfg.mqtt_password)
         self._client = c
-        try:
-            self._client.connect(self.cfg.mqtt_broker, self.cfg.mqtt_port)
-            self._client.loop_start()
-        except Exception as e:
-            raise ConnectionError(f"MQTT connect failed: {e}")
+        # connect_async + network loop (review 2026-11-26): if the broker is
+        # down at startup, the loop keeps retrying instead of leaving every
+        # publish dead until a console restart
+        self._client.connect_async(self.cfg.mqtt_broker, self.cfg.mqtt_port)
+        self._client.reconnect_delay_set(min_delay=1, max_delay=30)
+        self._client.loop_start()
 
     def publish(self, topic: str, message: dict, retain: bool = False) -> int:
         """Seal + publish. Returns the counter used."""
@@ -52,6 +53,14 @@ class Publisher:
             self._save_counter()
         env = crypto.seal(
             topic, message, self.cfg.payload_key, self.cfg.key_id, counter)
+        # V14: reject at the source — kubusd would silently drop an oversized
+        # message while the console reported it published (review 2026-11-26)
+        if len(env) > schema.MAX_MESSAGE_BYTES:
+            self._counter -= 1  # unused counter: don't burn replay slots
+            self._save_counter()
+            raise ValueError(
+                f"message too large for the Pi ({len(env)} > "
+                f"{schema.MAX_MESSAGE_BYTES} bytes) — simplify the pattern")
         info = self._client.publish(topic, env, qos=1, retain=retain)
         info.wait_for_publish(timeout=5)
         return counter

@@ -7,6 +7,7 @@ Never hard-code config; .env.example is the contract.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -85,7 +86,11 @@ class Config:
             try:
                 c.sign_schedule_env = json.loads(sched)
             except json.JSONDecodeError:
-                raise ValueError("SIGN_SCHEDULE must be valid JSON")
+                # non-fatal (review 2026-11-26): a mangled value must not
+                # crash-loop a stock install — fall back to the default
+                logging.getLogger("kubusd.config").warning(
+                    "SIGN_SCHEDULE is not valid JSON; using the built-in default")
+                c.sign_schedule_env = {}
         c.tz = get("TZ", c.tz)
         c.frame_rate = int(get("FRAME_RATE", str(c.frame_rate)))
         c.log_level = get("LOG_LEVEL", c.log_level)
