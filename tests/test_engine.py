@@ -130,3 +130,46 @@ def test_static_dim():
     engine.start()
     f = engine.step()
     assert abs(f.strips[0][0] - 0.5) < 0.05
+
+
+def test_speed_uniform_multiplier():
+    """`speed` means the same for every primitive: 1 = normal, 2 = faster,
+    0.5 = slower (SPEC §C). Rate-based primitives advance hue faster with
+    higher speed; period-based primitives (strobe) flash more often."""
+    from kubusd.engine import prim_rainbow, prim_strobe, _period, _rate
+
+    # helper level: rate grows with speed; period shrinks with speed
+    assert _rate(2.0, 0.5) > _rate(1.0, 0.5) > _rate(0.5, 0.5)
+    assert _period(1.0, 2.0) < _period(1.0, 1.0) < _period(1.0, 0.5)
+
+    # period-based: count on/off transitions over a 4 s window
+    def transitions(speed):
+        prev = None
+        n = 0
+        for i in range(400):
+            c = prim_strobe(i / 100.0, {"speed": speed})
+            on = c[0] > 0.0
+            if prev is not None and on != prev:
+                n += 1
+            prev = on
+        return n
+
+    slow = transitions(0.5)
+    norm = transitions(1.0)
+    fast = transitions(2.0)
+    assert slow < norm < fast, f"strobe transitions {slow} < {norm} < {fast}"
+
+    # rate-based: count full hue wraps (returns to red) in a 4 s window
+    def red_events(speed):
+        prev = False
+        n = 0
+        for i in range(400):
+            c = prim_rainbow(i / 100.0, {"speed": speed})
+            red = c[0] > 0.9 and c[1] < 0.2 and c[2] < 0.2
+            if red and not prev:
+                n += 1
+            prev = red
+        return n
+
+    sr, nr, fr = red_events(0.5), red_events(1.0), red_events(2.0)
+    assert sr < nr < fr, f"rainbow hue wraps {sr} < {nr} < {fr}"
