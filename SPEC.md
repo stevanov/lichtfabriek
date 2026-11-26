@@ -48,7 +48,7 @@ On a Pi Zero W v1.1, run a headless daemon (`kubusd`) that drives 3 PWM RGB stri
 - kubusd SQLite tables: `patterns` (last-good + history), `sign_state` (schedule + override), `audit` (received messages, invalid attempts).
 - kubusd systemd: unit file `deploy/kubusd.service`, install script `deploy/install.sh` (pulls release tarball from GitHub, installs deps, enables service). pigpiod as separate host service.
 - console env: `MQTT_BROKER`, `MQTT_PORT`, `MQTT_USERNAME`, `MQTT_PASSWORD`, `PAYLOAD_KEY`, `KEY_ID`, `SECRET_KEY` (flask sessions), `SQLITE_PATH`, `ADMIN_PASSWORD` (forced change on first login), `TZ`.
-- console web routes: login; patterns (create, activate, list, my patterns); admin (users, audit view, revoke/disable live pattern, ban IP, audit log); visualizer (alpha2): live in-browser preview of 3 cubes + 5 sign outputs while authoring — JS renderer in `console/static/` + `console/templates/`, primitive math mirrored from `kubusd/engine.py` (single source noted in comments).
+- console web routes: login; patterns (create, activate, list, my patterns); admin (users, audit view, revoke/disable live pattern, ban/disable live user, audit log); visualizer (alpha2): live in-browser preview of 3 cubes + 5 sign outputs while authoring — JS math in `console/static/viz.js` (single source, node-parity-tested against `kubusd/engine.py`); i18n (alpha4): Dutch/English toggle in the header, lightweight dict catalog `console/i18n.py`, EN default, cookie-persisted, console UI only (kubusd stays English).
 - docker: `compose.yaml` at repo root — console service (build from `console/`), dev-only kubusd simulator service. Pi deploy via systemd, not docker.
 - versioning: `git describe` produces `v<year>.<month>_<minor>.<bugfix>`; release = tag on master; both services report the same version.
 
@@ -56,17 +56,17 @@ On a Pi Zero W v1.1, run a headless daemon (`kubusd`) that drives 3 PWM RGB stri
 
 V1: kubusd runs 9 PWM channels + 5 sign outputs via pigpio socket, no root GPIO access in-process.
 V2: MQTT message schema + AEAD auth + replay counter validated before apply; invalid/forged/stale → logged (rate-limited), never interrupts current pattern.
-V3: offline/reboot: last-good pattern resumes from SQLite (WAL, synchronous=FULL); first boot → built-in default show; DB corruption → rename, recreate, default show.
+V3: offline/reboot: last-good pattern resumes from SQLite (WAL, synchronous=FULL); first boot → built-in default show; DB corruption → rename, recreate, default show; pre-alpha2 DB schemas are migrated at open (legacy primitive/params → canonical steps), never crash-looping on resume (review 2026-11-26).
 V4: simulator mode runs the same animation engine without pigpio (headless, ANSI output) — unit-testable in CI.
 V5: sign has fixed animation + schedule + manual override; MQTT override wins over schedule, both configurable, override has expiry; unsynced clock → defined default sign state.
 V6: console records title, creator username, description, created_ts, posting IP in ITS OWN DB; MQTT payload carries pattern_id + pattern_hash only (never IP/username, V19).
-V7: console: admin can revoke/disable any live pattern; ban IP stops publishing; rate limit on publish endpoints.
+V7: console: admin can revoke/disable any live pattern; ban (by username — the documented "IP ban" was never implemented; abusive IPs are handled by the rate limit) stops publishing; rate limit on ALL mutation endpoints (publish/activate/revoke/login) via one per-IP bucket; CSRF session token required on every POST + SameSite=Lax cookie (review 2026-11-26).
 V8: version `v<year>.<month>_<minor>.<bugfix>` (+ optional `-(alpha|beta|rc)<n>`), regex `^v\d{2}\.\d{2}_\d+\.\d+(-(alpha|beta|rc)\d+)?$`; one version for both services; every release (pre-release AND final) is merged devel → master with `--no-ff` and tagged on master; VERSION baked into release artifacts.
 V9: payload encryption = AEAD (ChaCha20-Poly1305 via PyNaCl, fallback AES-GCM), random nonce, topic as AAD, `key_id` in every message; key never in git, only `.env` (`.env.example` has placeholder); console key injected via `env_file`/secrets, never in compose.yaml.
 V10: deploy via systemd + install script from GitHub release, SHA256-verified tarball, previous release kept for rollback; idempotent; works offline after install.
 V11: no self-registration; accounts created by admin only.
 V12: crypto AEAD-only + replay counter (V2/V9).
-V13: replay protection: monotonic counter + timestamp window; kubusd persists last-accepted counter, rejects lower (V2).
+V13: replay protection: monotonic counter PER TOPIC + timestamp window; kubusd persists last-accepted counter per topic, rejects lower (V2). Retained messages and an obviously-unsynced clock skip the timestamp window (the counter still orders them) — review 2026-11-26.
 V14: safety caps: strobe < 3 Hz, global brightness cap, max message size, max `colors` length, last-write-wins for concurrent publishes. alpha2: per-step validation + sequence bounds — max 20 steps, min step 0.5 s, max total 10 min.
 V21: (alpha2) a pattern step addresses cubes independently; unspecified cubes persist their previous step's settings; first step default = off.
 V22: (alpha2) legacy single-primitive pattern messages are accepted and treated as a one-step sequence (all cubes) — backward compatible.
@@ -74,7 +74,7 @@ V23: (alpha2) the Console visualizer renders the same primitives/params/sequence
 V24: cube index → physical position: cube 0 = TOPMOST IBC tank, 1 = middle, 2 = bottom; visualizer, ANSI sim, console editor and field wiring all follow this mapping.
 V15: `pattern/set` retained + QoS1 + persistent session; revoke = publish default/previous pattern; persisted pattern TTL (no resurrection offline).
 V16: audit ring buffer (capped rows), rate-limited invalid logging; SQLite WAL + synchronous=FULL, corruption → rename+recreate+default show.
-V17: kubusd health: pigpiod + MQTT reconnect/healthcheck, render-loop watchdog, `Restart=always` + `WatchdogSec` in unit.
+V17: kubusd health: pigpiod reconnect + re-init on daemon restart, MQTT reconnect, `Type=notify` unit with the render loop feeding `WATCHDOG=1` (kubusd/notify.py — a wedged render loop stops pinging and systemd restarts it); clean SIGTERM zeroes the LEDs (review 2026-11-26).
 V18: sign clock: unsynced clock → defined default state; `TZ` in .env; override expiry; sign/schedule messages console-admin only.
 V19: privacy: posting IP + username never in MQTT payload; console DB only; kubusd logs pattern_id + pattern_hash.
 V20: no absolute/host-specific paths in the repo (no /home/, /mnt/c, /opt/..., /etc/..., /var/lib/...) — config defaults are relative (e.g. `./data/kubusd.db`), systemd unit is a template filled at install time, install prefix chosen by the installer, never hard-coded.

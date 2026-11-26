@@ -3,6 +3,31 @@
 All notable changes to Lichtfabriek. Format: reverse chronological.
 Versions follow `RELEASING.md` (v26.11_0.0-alphaN → … → v26.11_0.0).
 
+## Unreleased (alpha4 hardening + i18n)
+
+- **Full-codebase review fixes** (gemini-4-argon delta review ×6, Kimi K3.1
+  Pro blind review ×21 real, Claude Sonnet 5.5 full sweep — cross-checked):
+  - Deployment: `Type=notify` watchdog fed from the render loop (a wedged
+    loop restarts, a healthy one is never killed); install.sh preserves
+    `kubusd.env` + SQLite data across upgrades (chmod 600) and refuses to
+    start with a blank PAYLOAD_KEY; clean SIGTERM zeroes the LEDs.
+  - Crash-proofing: per-primitive color arity (sine needs 2) + integer seed
+    validation; render errors fall back to off instead of crash-looping on
+    resume; persistence resolved by replay from off (matches the preview);
+    alpha-DB migrations rebuild legacy tables into canonical steps.
+  - Protocol: per-topic replay counters; retained/unsynced-clock messages
+    skip the timestamp window; oversize rejected at the console; the
+    never-implemented control topic removed; periodic TTL sweep.
+  - Security: CSRF token on every POST; one rate-limit bucket covering
+    login/activate/revoke; XFF last-hop only; forced password change is now
+    a hard guard; `UnicodeDecodeError` → Reject; rate-limited audit writes.
+  - Parity: seeded primitives share one LCG across Python + JS (preview now
+    honors `seed`, holiday matches); primitive math extracted to
+    `console/static/viz.js` (single source) with an exact node-parity test;
+    pigpio auto-reconnect; strobe floor strictly < 3 Hz; paho pinned <2.
+- **Dutch/English UI toggle** (alpha4 feature): lightweight dict catalog
+  (`console/i18n.py`), EN default, cookie-persisted, console only.
+
 ## v26.11_0.0-alpha3 — 2026-11-26
 
 - **Sign loop confirmed** (SPEC §C, `docs/sign-layout.svg`): hammer pivots at
