@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 import sqlite3
+import threading
 import time
 from pathlib import Path
 
@@ -22,10 +23,19 @@ class ConsoleDB:
     def __init__(self, path: str):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(str(self.path))
+        # Flask serves requests from worker threads; sqlite3 needs either
+        # per-thread connections or check_same_thread=False + a lock.
+        self._lock = threading.Lock()
+        self.conn = sqlite3.connect(str(self.path), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
         self._create_tables()
+
+    def _execute(self, sql, params=()):
+        with self._lock:
+            cur = self.conn.execute(sql, params)
+            self.conn.commit()
+            return cur
 
     def _create_tables(self) -> None:
         self.conn.executescript(
@@ -73,18 +83,18 @@ class ConsoleDB:
     def create_user(self, username: str, password: str, is_admin: bool = False,
                     must_change_password: bool = False) -> None:
         salt, h = hash_password(password)
-        self.conn.execute(
+        self._execute(
             "INSERT INTO users (username, salt, hash, is_admin, "
             "must_change_password, created_ts) VALUES (?,?,?,?,?,?)",
             (username, salt, h, 1 if is_admin else 0,
              1 if must_change_password else 0, time.time()),
         )
-        self.conn.commit()
 
     def get_user(self, username: str):
-        return self.conn.execute(
-            "SELECT * FROM users WHERE username=?", (username,)
-        ).fetchone()
+        with self._lock:
+            return self.conn.execute(
+                "SELECT * FROM users WHERE username=?", (username,)
+            ).fetchone()
 
     def verify_password(self, username: str, password: str) -> bool:
         u = self.get_user(username)
@@ -95,22 +105,21 @@ class ConsoleDB:
 
     def set_password(self, username: str, password: str) -> None:
         salt, h = hash_password(password)
-        self.conn.execute(
+        self._execute(
             "UPDATE users SET salt=?, hash=?, must_change_password=0 WHERE username=?",
             (salt, h, username),
         )
-        self.conn.commit()
 
     def list_users(self):
-        return self.conn.execute(
-            "SELECT id, username, is_admin, banned, created_ts FROM users "
-            "ORDER BY created_ts"
-        ).fetchall()
+        with self._lock:
+            return self.conn.execute(
+                "SELECT id, username, is_admin, banned, created_ts FROM users "
+                "ORDER BY created_ts"
+            ).fetchall()
 
     def set_banned(self, username: str, banned: bool) -> None:
-        self.conn.execute(
+        self._execute(
             "UPDATE users SET banned=? WHERE username=?", (1 if banned else 0, username))
-        self.conn.commit()
 
     # ---- patterns (V6) ----
 
@@ -119,19 +128,19 @@ class ConsoleDB:
                     params: dict) -> None:
         import json
 
-        self.conn.execute(
+        self._execute(
             "INSERT INTO patterns (pattern_id, title, description, creator, "
             "created_ts, posting_ip, primitive, params) VALUES (?,?,?,?,?,?,?,?)",
             (pattern_id, title, description, creator, time.time(),
              posting_ip, primitive, json.dumps(params)),
         )
-        self.conn.commit()
 
     def list_patterns(self):
         import json
 
-        rows = self.conn.execute(
-            "SELECT * FROM patterns ORDER BY created_ts DESC").fetchall()
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT * FROM patterns ORDER BY created_ts DESC").fetchall()
         out = []
         for r in rows:
             d = dict(r)
@@ -142,8 +151,9 @@ class ConsoleDB:
     def get_pattern(self, pattern_id: str):
         import json
 
-        r = self.conn.execute(
-            "SELECT * FROM patterns WHERE pattern_id=?", (pattern_id,)).fetchone()
+        with self._lock:
+            r = self.conn.execute(
+                "SELECT * FROM patterns WHERE pattern_id=?", (pattern_id,)).fetchone()
         if not r:
             return None
         d = dict(r)
@@ -151,56 +161,56 @@ class ConsoleDB:
         return d
 
     def set_active(self, pattern_id: str) -> None:
-        self.conn.execute("UPDATE patterns SET active=0")
-        self.conn.execute(
+        self._execute("UPDATE patterns SET active=0")
+        self._execute(
             "UPDATE patterns SET active=1 WHERE pattern_id=?", (pattern_id,))
-        self.conn.commit()
 
     def get_active(self):
-        return self.conn.execute(
-            "SELECT * FROM patterns WHERE active=1").fetchone()
+        with self._lock:
+            return self.conn.execute(
+                "SELECT * FROM patterns WHERE active=1").fetchone()
 
     def clear_active(self) -> None:
-        self.conn.execute("UPDATE patterns SET active=0")
-        self.conn.commit()
+        self._execute("UPDATE patterns SET active=0")
 
     # ---- audit (V7) ----
 
     def audit(self, actor: str, action: str, detail: str, ip: str = "") -> None:
-        self.conn.execute(
+        self._execute(
             "INSERT INTO audit (ts, actor, action, detail, ip) VALUES (?,?,?,?,?)",
             (time.time(), actor, action, detail, ip),
         )
-        self.conn.commit()
 
     def list_audit(self, limit: int = 100):
-        return self.conn.execute(
-            "SELECT * FROM audit ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        with self._lock:
+            return self.conn.execute(
+                "SELECT * FROM audit ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
 
     # ---- rate limiting (V7) ----
 
     def rate_limit_hits(self, ip: str, minute: int) -> int:
-        row = self.conn.execute(
-            "SELECT COUNT(*) AS c FROM audit WHERE ip=? AND action='publish' "
-            "AND ts > ?",
-            (ip, minute),
-        ).fetchone()
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT COUNT(*) AS c FROM audit WHERE ip=? AND action='publish' "
+                "AND ts > ?",
+                (ip, minute),
+            ).fetchone()
         return row["c"]
 
     # ---- publish counter (V13: monotonic across restarts) ----
 
     def get_counter(self) -> int | None:
-        row = self.conn.execute(
-            "SELECT value FROM kv WHERE key='publish_counter'").fetchone()
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT value FROM kv WHERE key='publish_counter'").fetchone()
         return int(row["value"]) if row else None
 
     def set_counter(self, n: int) -> None:
-        self.conn.execute(
+        self._execute(
             "INSERT INTO kv (key, value) VALUES ('publish_counter', ?) "
             "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
             (str(n),),
         )
-        self.conn.commit()
 
     def close(self) -> None:
         self.conn.close()
