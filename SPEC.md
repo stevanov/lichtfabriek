@@ -8,7 +8,7 @@ On a Pi Zero W v1.1, run a headless daemon (`kubusd`) that drives 3 PWM RGB stri
 
 ## §C
 
-- hardware: Pi Zero W v1.1 (armv6, single-core, 512 MB RAM, 26 usable GPIO). 3 cubes, each with ONE plain RGB LED strip, whole strip one color at a time (like a single pixel) → 3 color outputs = 9 PWM channels (R/G/B per cube). NO addressable pixels (no WS2812/Neopixel). Plus 5 on/off sign outputs = 14 signals total.
+- hardware: Pi Zero W v1.1 (armv6, single-core, 512 MB RAM, 26 usable GPIO). 3 cubes, each with ONE plain RGB LED strip, whole strip one color at a time (like a single pixel) → 3 color outputs = 9 PWM channels (R/G/B per cube). NO addressable pixels (no WS2812/Neopixel). Plus 5 on/off sign outputs = 14 signals total. CUBE POSITIONS (2026-11-26): cube index 0 = TOPMOST IBC tank, 1 = middle, 2 = bottom — visualizer, ANSI sim, console editor and field wiring all follow this mapping.
 - PWM: pigpio daemon (pigpiod) runs on the Pi host; kubusd connects over its socket. Hardware PWM impossible for 9 channels (2 channels on BCM2835). software PWM rejected (jitter, CPU on single core).
 - deployment Pi: systemd unit + install script pulled from a GitHub release. release tarball ships with a checksum (SHA256) verified by install.sh; previous release kept for rollback. Docker on the Pi: NO (armv6 pain, too heavy). kubusd headless, no GUI.
 - deployment dev + console: Docker (docker compose). console is the only web app; it runs on Steven's server.
@@ -71,6 +71,7 @@ V14: safety caps: strobe < 3 Hz, global brightness cap, max message size, max `c
 V21: (alpha2) a pattern step addresses cubes independently; unspecified cubes persist their previous step's settings; first step default = off.
 V22: (alpha2) legacy single-primitive pattern messages are accepted and treated as a one-step sequence (all cubes) — backward compatible.
 V23: (alpha2) the Console visualizer renders the same primitives/params/sequence semantics as kubusd (mirrored math, cross-checked by tests).
+V24: cube index → physical position: cube 0 = TOPMOST IBC tank, 1 = middle, 2 = bottom; visualizer, ANSI sim, console editor and field wiring all follow this mapping.
 V15: `pattern/set` retained + QoS1 + persistent session; revoke = publish default/previous pattern; persisted pattern TTL (no resurrection offline).
 V16: audit ring buffer (capped rows), rate-limited invalid logging; SQLite WAL + synchronous=FULL, corruption → rename+recreate+default show.
 V17: kubusd health: pigpiod + MQTT reconnect/healthcheck, render-loop watchdog, `Restart=always` + `WatchdogSec` in unit.
