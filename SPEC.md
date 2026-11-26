@@ -4,7 +4,7 @@ Grill 2026-11-26, review 2026-11-26 (ghce gpt-6-luna + claude-sonnet-5.5, all am
 
 ## §G
 
-On a Pi Zero W v1.1, run a headless daemon (`kubusd`) that drives 3 PWM RGB strips (in 100 L cubes) + 5 on/off outputs (analog LED sign), animating patterns received over MQTT (payload-encrypted), with autonomous fallback when offline; a Flask web app (`console`) lets makerspace users create patterns and publish them immediately, while admins audit and can revoke any live pattern.
+On a Pi Zero W v1.1, run a headless daemon (`kubusd`) that drives 3 PWM RGB strips (in 1 m³ / 1000 L cubes) + 5 on/off outputs (analog LED sign), animating patterns received over MQTT (payload-encrypted), with autonomous fallback when offline; a Flask web app (`console`) lets makerspace users create patterns and publish them immediately, while admins audit and can revoke any live pattern.
 
 ## §C
 
