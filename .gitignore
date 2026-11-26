@@ -9,3 +9,7 @@ dist/
 data/
 *.db
 *.corrupt*
+
+# Git worktrees
+.worktrees/
+worktrees/
