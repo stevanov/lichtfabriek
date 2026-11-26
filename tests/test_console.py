@@ -140,8 +140,10 @@ def test_activate_pattern(client, monkeypatch):
 
     monkeypatch.setattr("console.app.publisher.publish_pattern", fake_publish)
     # create a pattern directly in the DB (with hash) then activate
-    db.add_pattern("pid1", "hash1", "Title", "desc", "admin", "127.0.0.1",
-                   "rainbow", {"speed": 1.0, "brightness": 0.5})
+    _steps = [{"duration_s": 5.0,
+               "cubes": {"0": {"primitive": "rainbow", "params": {}},
+                         "1": None, "2": None}}]
+    db.add_pattern("pid1", "hash1", "Title", "desc", "admin", "127.0.0.1", _steps)
     r = client.post("/patterns/pid1/activate", follow_redirects=True)
     assert b"activated" in r.data
     assert calls and calls[0]["pattern_hash"] == "hash1"
@@ -158,12 +160,51 @@ def test_activate_old_pattern_without_hash(client, monkeypatch):
                         lambda msg, retain=True: calls.append(msg) or 1)
     db.conn.execute(
         "INSERT INTO patterns (pattern_id, pattern_hash, title, creator, "
-        "created_ts, posting_ip, primitive, params) "
-        "VALUES ('old1','','T','a',1,'1.2.3.4','pulse','{}')")
+        "created_ts, posting_ip, steps) "
+        "VALUES ('old1','','T','a',1,'1.2.3.4','[]')")
     db.conn.commit()
     r = client.post("/patterns/old1/activate", follow_redirects=True)
     assert b"activated" in r.data
     assert calls and calls[0]["pattern_hash"]  # fallback hash generated
+
+
+def test_publish_sequence_steps(client, monkeypatch):
+    _bootstrap_admin()
+    client.post("/login", data={"username": "admin", "password": "admin-password"})
+    client.post("/change-password", data={"password": "adminpass123",
+                                          "password2": "adminpass123"})
+    calls = []
+
+    def fake_publish(msg, retain=True):
+        calls.append(msg)
+        return 1
+
+    monkeypatch.setattr("console.app.publisher.publish_pattern", fake_publish)
+    import json
+
+    steps = [
+        {"duration_s": 3.0,
+         "cubes": {"0": {"primitive": "fire", "params": {}},
+                   "1": None, "2": None}},
+        {"duration_s": 2.0,
+         "cubes": {"1": {"primitive": "static", "params": {"colors": [[0, 0, 255]]}}}},
+    ]
+    r = client.post("/patterns/new", data={
+        "title": "Seq", "steps": json.dumps(steps),
+    }, follow_redirects=True)
+    assert b"published" in r.data
+    assert calls and calls[0]["steps"] == steps
+
+
+def test_publish_bad_steps_json(client, monkeypatch):
+    _bootstrap_admin()
+    client.post("/login", data={"username": "admin", "password": "admin-password"})
+    client.post("/change-password", data={"password": "adminpass123",
+                                          "password2": "adminpass123"})
+    r = client.post("/patterns/new", data={
+        "title": "Bad", "steps": "{not json",
+    }, follow_redirects=True)
+    assert b"Invalid steps JSON" in r.data
 
 
 def test_activate_without_broker_no_500(client, monkeypatch):
@@ -172,7 +213,8 @@ def test_activate_without_broker_no_500(client, monkeypatch):
     client.post("/change-password", data={"password": "adminpass123",
                                           "password2": "adminpass123"})
     db.add_pattern("pid2", "hash2", "T2", "", "admin", "127.0.0.1",
-                   "rainbow", {"speed": 1.0})
+                   [{"duration_s": 5.0,
+                     "cubes": {"0": {"primitive": "rainbow", "params": {}}}}])
 
     def boom(msg, retain=True):
         raise ConnectionError("broker down")

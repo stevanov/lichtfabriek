@@ -59,8 +59,7 @@ class ConsoleDB:
                 creator TEXT NOT NULL,
                 created_ts REAL NOT NULL,
                 posting_ip TEXT NOT NULL,
-                primitive TEXT NOT NULL,
-                params TEXT NOT NULL,
+                steps TEXT NOT NULL,
                 active INTEGER NOT NULL DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS audit (
@@ -77,11 +76,14 @@ class ConsoleDB:
             );
             """
         )
-        # migration: older DBs lack pattern_hash
+        # migrations: older DBs lack pattern_hash / have primitive+params columns
         cols = {r[1] for r in self.conn.execute("PRAGMA table_info(patterns)")}
         if "pattern_hash" not in cols:
             self.conn.execute(
                 "ALTER TABLE patterns ADD COLUMN pattern_hash TEXT NOT NULL DEFAULT ''")
+        if "steps" not in cols and "primitive" in cols:
+            self.conn.execute(
+                "ALTER TABLE patterns ADD COLUMN steps TEXT NOT NULL DEFAULT '[]'")
         self.conn.commit()
 
     # ---- users (V11: admin-created only) ----
@@ -131,40 +133,44 @@ class ConsoleDB:
 
     def add_pattern(self, pattern_id: str, pattern_hash: str, title: str,
                     description: str, creator: str, posting_ip: str,
-                    primitive: str, params: dict) -> None:
+                    steps: list) -> None:
         import json
 
         self._execute(
             "INSERT INTO patterns (pattern_id, pattern_hash, title, description, creator, "
-            "created_ts, posting_ip, primitive, params) VALUES (?,?,?,?,?,?,?,?,?)",
+            "created_ts, posting_ip, steps) VALUES (?,?,?,?,?,?,?,?)",
             (pattern_id, pattern_hash, title, description, creator, time.time(),
-             posting_ip, primitive, json.dumps(params)),
+             posting_ip, json.dumps(steps)),
         )
 
-    def list_patterns(self):
+    def _pattern_row(self, r) -> dict:
         import json
 
+        d = dict(r)
+        try:
+            d["steps"] = json.loads(d.get("steps") or "[]")
+        except (ValueError, TypeError):
+            d["steps"] = []
+        # legacy rows: no steps -> derive from old primitive/params if present
+        if not d["steps"] and d.get("primitive"):
+            cube = {"primitive": d["primitive"], "params": json.loads(d.get("params") or "{}")}
+            d["steps"] = [{"duration_s": 60.0,
+                           "cubes": {"0": cube, "1": cube, "2": cube}}]
+        return d
+
+    def list_patterns(self):
         with self._lock:
             rows = self.conn.execute(
                 "SELECT * FROM patterns ORDER BY created_ts DESC").fetchall()
-        out = []
-        for r in rows:
-            d = dict(r)
-            d["params"] = json.loads(d["params"])
-            out.append(d)
-        return out
+        return [self._pattern_row(r) for r in rows]
 
     def get_pattern(self, pattern_id: str):
-        import json
-
         with self._lock:
             r = self.conn.execute(
                 "SELECT * FROM patterns WHERE pattern_id=?", (pattern_id,)).fetchone()
         if not r:
             return None
-        d = dict(r)
-        d["params"] = json.loads(d["params"])
-        return d
+        return self._pattern_row(r)
 
     def set_active(self, pattern_id: str) -> None:
         self._execute("UPDATE patterns SET active=0")

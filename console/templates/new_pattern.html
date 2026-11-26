@@ -1,28 +1,257 @@
 {% extends "base.html" %}
 {% block title %}New pattern — Lichtfabriek{% endblock %}
 {% block content %}
-<div class="panel" style="max-width:560px;">
+<div class="panel" style="max-width:760px;">
   <h1>New pattern</h1>
-  <p class="muted">Publishing activates the pattern on the cubes immediately.
-  Admins can revoke it afterwards.</p>
-  <form method="post">
+  <p class="muted">A pattern is a sequence of steps. Each step runs for its
+  duration, and each cube can use its own primitive. Cubes you don't set keep
+  their previous step's look (first step = off). Publishing activates it on
+  the cubes immediately.</p>
+
+  <div id="viz" class="viz" style="margin:16px 0;">
+    <div class="viz-cubes">
+      <div class="cube" id="cube0">cube 1</div>
+      <div class="cube" id="cube1">cube 2</div>
+      <div class="cube" id="cube2">cube 3</div>
+    </div>
+    <div class="viz-sign">
+      <span class="sign-lamp" id="sign-anvil" title="anvil">▲</span>
+      <span class="sign-lamp" id="sign-s1">■</span>
+      <span class="sign-lamp" id="sign-s2">■</span>
+      <span class="sign-lamp" id="sign-s3">■</span>
+      <span class="sign-lamp" id="sign-spark">✦</span>
+      <span class="muted">sign</span>
+    </div>
+  </div>
+
+  <form method="post" id="pattern-form">
     <label>Title</label>
     <input name="title" placeholder="e.g. Sinterklaas 2026" required>
     <label>Description</label>
     <textarea name="description" rows="2" placeholder="What it looks like, when to use it"></textarea>
-    <label>Primitive</label>
-    <select name="primitive">
-      {% for p in primitives %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
-    </select>
-    <div class="row">
-      <div><label>Speed (0.01–20, strobe &lt; 3 Hz)</label>
-        <input name="speed" type="number" step="0.1" min="0.01" max="20" value="1"></div>
-      <div><label>Brightness (0–1)</label>
-        <input name="brightness" type="number" step="0.05" min="0" max="1" value="1"></div>
+    <input type="hidden" name="steps" id="steps-field" value="">
+
+    <div id="steps-editor"></div>
+    <button type="button" class="secondary" id="add-step">+ Add step</button>
+
+    <div style="margin-top:16px;">
+      <button type="submit" id="publish-btn">Publish</button>
+      <span class="muted" id="seq-status"></span>
     </div>
-    <label>Colors (r,g,b;r,g,b;…, optional)</label>
-    <input name="colors" placeholder="e.g. 255,0,0;0,255,0">
-    <button type="submit">Publish</button>
   </form>
 </div>
+
+<script>
+const PRIMITIVES = {{ primitives | tojson }};
+
+// ---- small color / time helpers (mirror kubusd/engine.py, V23) ----
+function strobe(t, speed) {
+  const period = Math.max(1 / 3.0, speed); // < 3 Hz cap (V14)
+  return (t % period) / period;
+}
+function hsv(h, s, v) {
+  h = ((h % 1) + 1) % 1;
+  const i = Math.floor(h * 6), f = h * 6 - i,
+        p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+  return [[v,t,p],[q,v,p],[p,v,t],[p,q,v],[t,p,v],[v,p,q]][i % 6];
+}
+function bright(c, b) { return c.map(x => Math.min(1, Math.max(0, x * b))); }
+function c01(c) { return [c[0]/255, c[1]/255, c[2]/255]; }
+
+// ---- primitives: (t, params) -> [r,g,b] 0..1  (mirror of engine.py) ----
+const PRIMS = {
+  rainbow: (t,p) => { const [r,g,b]=hsv(t*(p.speed??0.5),1,1); return bright([r,g,b], p.brightness??1); },
+  huesweep: (t,p) => { const [r,g,b]=hsv(t*(p.speed??0.2),1,1); return bright([r,g,b], p.brightness??1); },
+  pulse: (t,p) => {
+    const cols = p.colors||[[255,0,0],[0,255,0],[0,0,255]];
+    const col = cols[Math.floor(t/Math.max(p.speed??1,0.01)) % cols.length];
+    const ph = strobe(t, p.speed??1), amp = 0.5+0.5*Math.sin(ph*2*Math.PI);
+    return bright(c01(col).map(x=>x*amp), p.brightness??1);
+  },
+  fade: (t,p) => {
+    const cols = p.colors||[[255,0,0],[0,255,0],[0,0,255]];
+    const n=cols.length, ph=strobe(t,p.speed??0.5);
+    const i=Math.floor(ph*n)%n, j=(i+1)%n, f=(ph*n)-i;
+    const a=c01(cols[i]), b=c01(cols[j]);
+    return bright([a[0]*(1-f)+b[0]*f, a[1]*(1-f)+b[1]*f, a[2]*(1-f)+b[2]*f], p.brightness??1);
+  },
+  chase: (t,p) => {
+    const on = Math.floor(strobe(t,p.speed??0.8)*4)%2===0;
+    const c = c01((p.colors||[[255,255,255]])[0]);
+    return bright(c.map(x=>on?x:0), p.brightness??1);
+  },
+  holiday: (t,p) => {
+    const ph = strobe(t*0.5, p.speed??1), warm=0.5+0.5*Math.sin(ph*2*Math.PI);
+    return bright([warm, warm*0.9, warm*0.4], p.brightness??1);
+  },
+  random: (t,p) => {
+    const seed = Math.floor(t/Math.max(p.speed??0.5,0.01));
+    let x = (seed*9301+49297)%233280;
+    const r=()=>{ x=(x*9301+49297)%233280; return x/233280; };
+    return bright([r(),r(),r()], p.brightness??1);
+  },
+  fire: (t,p) => {
+    const seed = Math.floor(t/Math.max(p.speed??0.3,0.01)*10);
+    let x=(seed*9301+49297)%233280; const r=()=>{x=(x*9301+49297)%233280;return x/233280;};
+    const f=0.6+0.4*r();
+    return bright([f, f*0.35, f*0.05], p.brightness??1);
+  },
+  sparkle: (t,p) => {
+    const seed = Math.floor(t/Math.max(p.speed??0.7,0.01));
+    let x=(seed*9301+49297)%233280; const r=()=>{x=(x*9301+49297)%233280;return x/233280;};
+    const c = c01((p.colors||[[255,255,255]])[0]);
+    return bright(c.map(v=>r()<0.2?v:0), p.brightness??1);
+  },
+  sine: (t,p) => {
+    const cols=p.colors||[[255,0,0],[0,0,255]];
+    const m=0.5+0.5*Math.sin(t*(p.speed??0.4)*2*Math.PI);
+    const a=c01(cols[0]), b=c01(cols[1]);
+    return bright([a[0]*(1-m)+b[0]*m, a[1]*(1-m)+b[1]*m, a[2]*(1-m)+b[2]*m], p.brightness??1);
+  },
+  strobe: (t,p) => {
+    const on = strobe(t,p.speed??1)<0.5;
+    const c = c01((p.colors||[[255,255,255]])[0]);
+    return bright(c.map(x=>on?x:0), p.brightness??1);
+  },
+  police: (t,p) => {
+    const cols=p.colors||[[255,0,0],[0,0,255]];
+    const c = cols[Math.floor(strobe(t,p.speed??0.6)*2)%cols.length];
+    return bright(c01(c), p.brightness??1);
+  },
+  knight: (t,p) => {
+    const on = strobe(t,p.speed??0.8)<0.25;
+    const c = c01((p.colors||[[255,255,255]])[0]);
+    return bright(c.map(x=>on?x:0), p.brightness??1);
+  },
+  static: (t,p) => bright(c01((p.colors||[[255,255,255]])[0]), p.brightness??0.5),
+  off: () => [0,0,0],
+};
+
+// ---- step model in the editor ----
+let steps = [{ duration_s: 5, cubes: {0:{primitive:'rainbow',params:{}},1:null,2:null} }];
+
+function cubeInputs(idx) {
+  const cube = steps[idx];
+  let rows = '';
+  for (let ci=0; ci<3; ci++) {
+    const spec = cube.cubes[ci];
+    rows += `<div class="cube-row" data-cube="${ci}">
+      <label class="cube-label">cube ${ci+1}</label>
+      <select onchange="onPrim(${idx},${ci},this)">
+        <option value="">(keep)</option>
+        ${PRIMITIVES.map(p=>`<option value="${p}" ${spec&&spec.primitive===p?'selected':''}>${p}</option>`).join('')}
+      </select>
+      <input type="number" step="0.1" min="0" max="1" value="${spec?spec.params.brightness??1:1}"
+             placeholder="bright" title="brightness 0-1" style="width:80px"
+             oninput="onBright(${idx},${ci},this)">
+    </div>`;
+  }
+  return rows;
+}
+
+function renderEditor() {
+  const el = document.getElementById('steps-editor');
+  el.innerHTML = steps.map((s,i)=>`
+    <div class="step-card">
+      <div class="step-head">
+        <strong>Step ${i+1}</strong>
+        <label class="muted">duration (s)</label>
+        <input type="number" step="0.5" min="0.5" value="${s.duration_s}" style="width:80px"
+               oninput="onDur(${i},this)">
+        <button type="button" class="secondary" onclick="rmStep(${i})">×</button>
+      </div>
+      ${cubeInputs(i)}
+    </div>`).join('');
+}
+
+function stepsJson() {
+  // drop empty (keep) rows: null
+  return steps.map(s => ({
+    duration_s: +s.duration_s,
+    cubes: Object.fromEntries(Object.entries(s.cubes).map(([k,v])=>[k, v&&v.primitive?{primitive:v.primitive, params:v.params}:null])),
+  }));
+}
+
+function onPrim(i, ci, sel) {
+  if (!sel.value) { steps[i].cubes[ci] = null; }
+  else { steps[i].cubes[ci] = { primitive: sel.value, params: {} }; }
+}
+function onBright(i, ci, inp) {
+  const spec = steps[i].cubes[ci];
+  if (spec) spec.params.brightness = +inp.value;
+}
+function onDur(i, inp) { steps[i].duration_s = +inp.value; }
+function rmStep(i) { steps.splice(i,1); if(!steps.length) steps=[{duration_s:5,cubes:{0:{primitive:'rainbow',params:{}},1:null,2:null}}]; renderEditor(); }
+
+document.getElementById('add-step').onclick = () => {
+  steps.push({ duration_s: 5, cubes: {0:null,1:null,2:null} });
+  renderEditor();
+};
+
+// ---- visualizer (T19): run the sequence live ----
+let cubeState = [{p:'off',params:{}},{p:'off',params:{}},{p:'off',params:{}}];
+let t0 = performance.now()/1000;
+
+function applyVisual(t) {
+  const seq = stepsJson();
+  const total = seq.reduce((a,s)=>a+s.duration_s,0) || 1;
+  let tt = t % total;
+  for (const s of seq) {
+    if (tt < s.duration_s) {
+      const tIn = tt;
+      for (let ci=0; ci<3; ci++) {
+        const spec = s.cubes[ci];
+        if (spec && spec.primitive) cubeState[ci] = {p:spec.primitive, params:spec.params||{}};
+        const st = cubeState[ci];
+        const color = (PRIMS[st.p]||PRIMS.off)(tIn, st.params);
+        document.getElementById('cube'+ci).style.background =
+          `rgb(${Math.round(color[0]*255)},${Math.round(color[1]*255)},${Math.round(color[2]*255)})`;
+      }
+      // sign: fixed hammer cycle (mirror scheduler.py)
+      const cyc = tIn % 8.0;
+      const lamp = id => document.getElementById(id).classList.toggle('on',
+        cyc>=0&&cyc<8); // anvil always on
+      lamp('sign-anvil'); document.getElementById('sign-anvil').classList.add('on');
+      document.getElementById('sign-s1').classList.toggle('on', cyc<1);
+      document.getElementById('sign-s2').classList.toggle('on', cyc>=1&&cyc<2);
+      document.getElementById('sign-s3').classList.toggle('on', cyc>=2&&cyc<4.5);
+      document.getElementById('sign-spark').classList.toggle('on', cyc>=3&&cyc<4.5);
+      break;
+    }
+    tt -= s.duration_s;
+  }
+}
+
+function vizLoop() {
+  const t = performance.now()/1000 - t0;
+  applyVisual(t);
+  requestAnimationFrame(vizLoop);
+}
+
+document.getElementById('pattern-form').onsubmit = () => {
+  document.getElementById('steps-field').value = JSON.stringify(stepsJson());
+  return true;
+};
+document.getElementById('seq-status').textContent =
+  `${PRIMITIVES.length} primitives available`;
+renderEditor();
+vizLoop();
+</script>
+
+<style>
+.viz-cubes { display:flex; gap:16px; justify-content:center; margin-bottom:12px; }
+.cube { width:110px; height:110px; border-radius:12px; background:#111;
+        color:#fff; display:flex; align-items:flex-end; justify-content:center;
+        padding-bottom:6px; font-size:12px; border:1px solid var(--border);
+        transition: background 0.08s linear; }
+.viz-sign { display:flex; gap:8px; align-items:center; justify-content:center; }
+.sign-lamp { width:34px; height:34px; border-radius:50%; background:#222; color:#666;
+             display:flex; align-items:center; justify-content:center; font-size:16px; }
+.sign-lamp.on { background:#ffdd66; color:#222; }
+.step-card { border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px; }
+.step-head { display:flex; gap:10px; align-items:center; margin-bottom:8px; }
+.cube-row { display:flex; gap:10px; align-items:center; margin-bottom:6px; }
+.cube-label { width:60px; color:var(--muted); font-size:13px; }
+.cube-row select { width:auto; margin:0; }
+</style>
 {% endblock %}
