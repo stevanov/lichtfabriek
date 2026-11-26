@@ -3,23 +3,6 @@
 All notable changes to Lichtfabriek. Format: reverse chronological.
 Versions follow `RELEASING.md` (v26.11_0.0-alphaN → … → v26.11_0.0).
 
-## v26.11_0.0-alpha3 — 2026-11-26
-
-- **Sign loop confirmed** (SPEC §C, `docs/sign-layout.svg`): hammer pivots at
-  the bottom of its handle on the right of the anvil, swings CCW to the left,
-  sparks flash up-left, then JUMPS back upright. Cycle ~3 s; the board never
-  goes dark. Constants in `kubusd/scheduler.py`; the sign runs on its own
-  clock in the visualizer.
-- **Animator page** reworked to the physical layout: step editor left,
-  physical rig right (hammer board on top, 3 true-cube IBC tanks stacked
-  below). Cube 1 (index 0) = topmost tank (SPEC V24).
-- **Step editor columns**: cube / primitive / brightness / speed with headers;
-  brightness + speed are sliders with live values.
-- **ANSI simulator** (`python -m kubusd sim`) matches the same layout (sign
-  LEDs top, cube stack right) with color-coded outputs.
-- **`.env.example`** added for kubusd + console (the contract referenced by
-  install.sh/config/README/SPEC, V9/V20).
-
 ## v26.11_0.0-alpha2 — 2026-11-26
 
 - Patterns are now **sequences of steps** (looped), each with per-cube
