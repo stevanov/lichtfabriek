@@ -95,10 +95,10 @@ class SimulatorOutput(BaseOutput):
         rows.append("  sign: " + "   ".join(leds))
         rows.append("")
 
-        # ---- right side: 3 cubes stacked (cube 2 on top, 0 on bottom) ----
+        # ---- right side: 3 cubes stacked (cube 1 on top, 3 on the bottom) ----
         pad = max(self.cols - (self.width + 2), 2)
         left = " " * pad
-        for i in (2, 1, 0):
+        for i in (0, 1, 2):
             color = ints[i]
             inner = f"  cube {i} ".ljust(self.width)
             rows.append(f"{left}┌{'─' * self.width}┐")
