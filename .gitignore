@@ -10,6 +10,6 @@ data/
 *.db
 *.corrupt*
 
-# Git worktrees
-.worktrees/
-worktrees/
+# Git worktrees (any name containing "worktrees" — Claude, opencode, etc.)
+*worktrees*/
+.worktrees*
