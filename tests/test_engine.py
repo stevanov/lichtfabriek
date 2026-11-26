@@ -188,3 +188,21 @@ def test_speed_uniform_multiplier():
 
     sr, nr, fr = red_events(0.5), red_events(1.0), red_events(2.0)
     assert sr < nr < fr, f"rainbow hue wraps {sr} < {nr} < {fr}"
+
+
+def test_offset_shifts_phase():
+    """params.offset time-shifts the animation (phase offset, e.g. knight sweep).
+    offset=period must produce the same frame as offset=0; a non-zero offset
+    must change when the flash happens."""
+    from kubusd.engine import prim_rainbow, prim_knight
+
+    # rainbow: offset shifts hue; a full period (1/speed) lands on the same hue
+    a = prim_rainbow(1.0, {"speed": 1.0, "offset": 0.0})
+    b = prim_rainbow(1.0, {"speed": 1.0, "offset": 2.0})   # base period 2s
+    assert abs(a[0] - b[0]) < 1e-6 and abs(a[1] - b[1]) < 1e-6
+
+    # knight: offset moves the lit phase, so a cube with offset=0.4 differs
+    # from one at 0 at the same wall time
+    k0 = prim_knight(0.9, {"speed": 1.0, "offset": 0.0})
+    k1 = prim_knight(0.9, {"speed": 1.0, "offset": 0.4})
+    assert k0 != k1, "offset should change the knight flash phase"
