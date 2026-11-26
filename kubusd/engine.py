@@ -57,10 +57,11 @@ def _color01(color) -> list[float]:
     return [c / 255.0 for c in color]
 
 
-def _shifted(t: float, params: dict) -> float:
-    """Time-shift t by params.offset (seconds) — phase offset so identical
-    primitives on different cubes run out of phase (knight sweep, chase, ...)."""
-    return t + params.get("offset", 0.0)
+def _shifted(t: float, params: dict, cycle: float) -> float:
+    """Time-shift t by params.offset — a FRACTION of one animation cycle
+    (0..1), so identical primitives on different cubes run out of phase
+    (knight sweep, chase, ...). offset=0.5 => exactly half a cycle apart."""
+    return t + params.get("offset", 0.0) * cycle
 
 
 # ---- primitives: all (t, params) -> color [0..1]^3 ----
@@ -70,14 +71,15 @@ def _shifted(t: float, params: dict) -> float:
 
 def prim_rainbow(t: float, params: dict) -> list[float]:
     speed = params.get("speed", 1.0)
-    hue = (_shifted(t, params) * _rate(speed, 0.5)) % 1.0
+    cycle = 1.0 / _rate(speed, 0.5)
+    hue = (_shifted(t, params, cycle) * _rate(speed, 0.5)) % 1.0
     r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
     return _apply_brightness([r, g, b], params.get("brightness", 1.0))
 
 
 def prim_pulse(t: float, params: dict) -> list[float]:
     speed = params.get("speed", 1.0)
-    ts = _shifted(t, params)
+    ts = _shifted(t, params, _period(1.0, speed))
     colors = params.get("colors") or [[255, 0, 0], [0, 255, 0], [0, 0, 255]]
     period = _period(1.0, speed)
     color = colors[int(ts / max(period, 0.01)) % len(colors)]
@@ -89,7 +91,7 @@ def prim_pulse(t: float, params: dict) -> list[float]:
 
 def prim_fade(t: float, params: dict) -> list[float]:
     speed = params.get("speed", 1.0)
-    ts = _shifted(t, params)
+    ts = _shifted(t, params, _period(0.5, speed))
     colors = params.get("colors") or [[255, 0, 0], [0, 255, 0], [0, 0, 255]]
     n = len(colors)
     phase = _t_strobed(ts, 0.5, speed)
@@ -106,7 +108,7 @@ def prim_fade(t: float, params: dict) -> list[float]:
 def prim_chase(t: float, params: dict) -> list[float]:
     # on a single cube, chase = blinking at the strobe-capped rate
     speed = params.get("speed", 1.0)
-    ts = _shifted(t, params)
+    ts = _shifted(t, params, _period(0.8, speed))
     colors = params.get("colors") or [[255, 255, 255]]
     step = _t_strobed(ts, 0.8, speed)
     on = bool(int(step * 4) % 2)
@@ -117,7 +119,8 @@ def prim_chase(t: float, params: dict) -> list[float]:
 
 def prim_holiday(t: float, params: dict) -> list[float]:
     speed = params.get("speed", 1.0)
-    ts = _shifted(t, params)
+    # phase uses t*0.5 -> effective cycle is 2x the base period
+    ts = _shifted(t, params, 2.0 * _period(1.0, speed))
     seed = params.get("seed", 0)
     rnd = random.Random(seed)
     sparkle = 0.7 + 0.3 * rnd.random()
@@ -138,7 +141,8 @@ def prim_random(t: float, params: dict) -> list[float]:
     """Random color that changes at a strobe-capped rate (seeded per instance)."""
     speed = params.get("speed", 1.0)
     seed = params.get("seed", 0)
-    rnd = random.Random(seed + int(_shifted(t, params) / max(_period(0.5, speed), 0.01)))
+    cycle = _period(0.5, speed)
+    rnd = random.Random(seed + int(_shifted(t, params, cycle) / max(cycle, 0.01)))
     return _apply_brightness([rnd.random(), rnd.random(), rnd.random()],
                              params.get("brightness", 1.0))
 
@@ -147,7 +151,8 @@ def prim_fire(t: float, params: dict) -> list[float]:
     """Flickering warm fire: orange-red with fast random intensity variation."""
     speed = params.get("speed", 1.0)
     seed = params.get("seed", 0)
-    rnd = random.Random(seed + int(_shifted(t, params) / max(_period(0.3, speed), 0.01) * 10))
+    cycle = _period(0.3, speed)
+    rnd = random.Random(seed + int(_shifted(t, params, cycle) / max(cycle, 0.01) * 10))
     flicker = 0.6 + 0.4 * rnd.random()
     return _apply_brightness(
         [1.0 * flicker, 0.35 * flicker, 0.05 * flicker],
@@ -164,10 +169,11 @@ def prim_sparkle(t: float, params: dict) -> list[float]:
     color from the palette (or from params.colors when 2+ given)."""
     speed = params.get("speed", 1.0)
     seed = params.get("seed", 0)
-    ts = _shifted(t, params)
+    cycle = _period(0.7, speed)
+    ts = _shifted(t, params, cycle)
     colors = params.get("colors")
     palette = colors if colors and len(colors) >= 2 else SPARKLE_PALETTE
-    rnd = random.Random(seed + int(ts / max(_period(0.7, speed), 0.01)))
+    rnd = random.Random(seed + int(ts / max(cycle, 0.01)))
     on = rnd.random() < 0.2
     base = _color01(palette[int(rnd.random() * len(palette)) % len(palette)])
     return _apply_brightness([c if on else 0.0 for c in base],
@@ -177,7 +183,8 @@ def prim_sparkle(t: float, params: dict) -> list[float]:
 def prim_huesweep(t: float, params: dict) -> list[float]:
     """Smooth continuous hue sweep across the full color wheel."""
     speed = params.get("speed", 1.0)
-    hue = (_shifted(t, params) * _rate(speed, 0.2)) % 1.0
+    cycle = 1.0 / _rate(speed, 0.2)
+    hue = (_shifted(t, params, cycle) * _rate(speed, 0.2)) % 1.0
     r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
     return _apply_brightness([r, g, b], params.get("brightness", 1.0))
 
@@ -188,7 +195,8 @@ def prim_sine(t: float, params: dict) -> list[float]:
     colors = params.get("colors") or [[255, 0, 0], [0, 0, 255]]
     c1 = _color01(colors[0])
     c2 = _color01(colors[1])
-    mix = 0.5 + 0.5 * math.sin(_shifted(t, params) * _rate(speed, 0.4) * 2 * math.pi)
+    cycle = 1.0 / _rate(speed, 0.4)
+    mix = 0.5 + 0.5 * math.sin(_shifted(t, params, cycle) * _rate(speed, 0.4) * 2 * math.pi)
     return _apply_brightness(
         [c1[j] * (1 - mix) + c2[j] * mix for j in range(3)],
         params.get("brightness", 1.0))
@@ -197,7 +205,8 @@ def prim_sine(t: float, params: dict) -> list[float]:
 def prim_strobe(t: float, params: dict) -> list[float]:
     """Hard on/off strobing between a color and black (strobe-capped, V14)."""
     colors = params.get("colors") or [[255, 255, 255]]
-    phase = _t_strobed(_shifted(t, params), 1.0, params.get("speed", 1.0))
+    phase = _t_strobed(_shifted(t, params, _period(1.0, params.get("speed", 1.0))),
+                       1.0, params.get("speed", 1.0))
     on = phase < 0.5
     base = _color01(colors[0])
     return _apply_brightness([c if on else 0.0 for c in base],
@@ -207,7 +216,8 @@ def prim_strobe(t: float, params: dict) -> list[float]:
 def prim_police(t: float, params: dict) -> list[float]:
     """Alternate red/blue (or two colors) at strobe-capped rate."""
     colors = params.get("colors") or [[255, 0, 0], [0, 0, 255]]
-    phase = _t_strobed(_shifted(t, params), 0.6, params.get("speed", 1.0))
+    speed = params.get("speed", 1.0)
+    phase = _t_strobed(_shifted(t, params, _period(0.6, speed)), 0.6, speed)
     color = colors[int(phase * 2) % len(colors)]
     return _apply_brightness(_color01(color), params.get("brightness", 1.0))
 
@@ -215,9 +225,11 @@ def prim_police(t: float, params: dict) -> list[float]:
 def prim_knight(t: float, params: dict) -> list[float]:
     """A single lit cube scanning a position; per-cube, so on a lone cube this
     becomes a periodic blink; the sequence engine gives it the sweep feel.
-    With a per-cube `offset` this becomes a real moving scan across cubes."""
+    With a per-cube `offset` (fraction of the cycle) this becomes a real moving
+    scan across cubes."""
     colors = params.get("colors") or [[255, 255, 255]]
-    phase = _t_strobed(_shifted(t, params), 0.8, params.get("speed", 1.0))
+    speed = params.get("speed", 1.0)
+    phase = _t_strobed(_shifted(t, params, _period(0.8, speed)), 0.8, speed)
     on = phase < 0.25
     base = _color01(colors[0])
     return _apply_brightness([c if on else 0.0 for c in base],

@@ -191,18 +191,20 @@ def test_speed_uniform_multiplier():
 
 
 def test_offset_shifts_phase():
-    """params.offset time-shifts the animation (phase offset, e.g. knight sweep).
-    offset=period must produce the same frame as offset=0; a non-zero offset
-    must change when the flash happens."""
+    """params.offset is a FRACTION of one animation cycle (0..1): offset=1.0
+    must reproduce the base frame; offset=0.5 must shift to the opposite phase
+    (e.g. knight flash moved by half a cycle)."""
     from kubusd.engine import prim_rainbow, prim_knight
 
-    # rainbow: offset shifts hue; a full period (1/speed) lands on the same hue
+    # rainbow: offset=1.0 (full cycle) lands on the same hue as offset=0
     a = prim_rainbow(1.0, {"speed": 1.0, "offset": 0.0})
-    b = prim_rainbow(1.0, {"speed": 1.0, "offset": 2.0})   # base period 2s
+    b = prim_rainbow(1.0, {"speed": 1.0, "offset": 1.0})
     assert abs(a[0] - b[0]) < 1e-6 and abs(a[1] - b[1]) < 1e-6
 
-    # knight: offset moves the lit phase, so a cube with offset=0.4 differs
-    # from one at 0 at the same wall time
-    k0 = prim_knight(0.9, {"speed": 1.0, "offset": 0.0})
-    k1 = prim_knight(0.9, {"speed": 1.0, "offset": 0.4})
-    assert k0 != k1, "offset should change the knight flash phase"
+    # knight: at half-cycle offset the flash is on the opposite side, so at
+    # wall times where one cube is lit the other is off (and vice versa)
+    on_times = [t / 20.0 for t in range(20)]
+    lit0 = [prim_knight(t, {"speed": 1.0, "offset": 0.0})[0] > 0 for t in on_times]
+    lit1 = [prim_knight(t, {"speed": 1.0, "offset": 0.5})[0] > 0 for t in on_times]
+    assert lit0 != lit1, "half-cycle offset should flip the knight flash"
+    assert any(a_ and not b_ for a_, b_ in zip(lit0, lit1)), "cubes must be out of phase"

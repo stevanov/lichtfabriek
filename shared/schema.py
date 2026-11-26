@@ -42,7 +42,7 @@ MAX_COLOR_CHANNELS = 3
 MIN_SPEED = 0.01
 MAX_SPEED = 20.0
 MIN_OFFSET = 0.0
-MAX_OFFSET = 60.0  # seconds of time-shift for a phase offset (knight sweep etc.)
+MAX_OFFSET = 1.0  # fraction of one animation cycle (phase offset, knight sweep etc.)
 
 # Sequence bounds (alpha2, V14)
 MAX_STEPS = 20
