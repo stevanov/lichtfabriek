@@ -85,7 +85,12 @@ cd lichtfabriek
 KUBUSD_TOKEN=<token> KUBUSD_VERSION=<tag> ./deploy/install.sh
 ```
 
-Release tags look like `v26.11_38.0` (see `RELEASING.md`). The installer pulls
-the release tarball + checksum from GitHub, verifies the SHA256 (V10), installs
-into `KUBUSD_PREFIX`, and creates/updates the `kubusd` systemd unit. Fill in
-the generated env file (`PAYLOAD_KEY` must match the console).
+Release tags look like `v26.11_0.0-alpha1` (see `RELEASING.md` for the
+alpha → beta → rc → final ladder). The installer pulls the release tarball +
+checksum from GitHub, verifies the SHA256 (V10), installs into `KUBUSD_PREFIX`,
+and creates/updates the `kubusd` systemd unit. Fill in the generated env file
+(`PAYLOAD_KEY` must match the console).
+
+## License
+
+MIT — see `LICENSE`.
