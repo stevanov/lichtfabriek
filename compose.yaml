@@ -1,0 +1,15 @@
+# Lichtfabriek dev + console compose (SPEC §C: Docker for dev + console only;
+# the Pi runs systemd, not docker).
+services:
+  console:
+    build:
+      context: .
+      dockerfile: console/Dockerfile
+    ports:
+      - "5001:5001"
+    volumes:
+      # secrets come from env_file, never baked in (V9)
+      - ./data/console:/app/data
+    env_file:
+      - console/.env
+    restart: unless-stopped

@@ -1,60 +1,59 @@
 # Lichtfabriek
 
-Lichtfabriek laat de 3 RGB-kubussen (1 m³ / 1000 liter) en het analoge LED-bord van
-Stadsfabriek Alkmaar branden. Twee diensten in één monorepo:
+Lichtfabriek drives the 3 RGB cubes (1 m³ / 1000 liter each) and the analog
+LED sign at Stadsfabriek makerspace in Alkmaar. Two services in one monorepo:
 
-| Dienst | Waar | Wat |
+| Service | Where | What |
 |---|---|---|
-| **kubusd** | Raspberry Pi Zero W v1.1 (armv6, headless) | Daemon die de 9 PWM-kanalen (3 strips × RGB) + 5 aan/uit-uitgangen van het bord aanstuurt via pigpio. Ontvangt patronen over MQTT, animeert autonoom offline. |
-| **console** | jouw server (Docker) | Flask-webapp: gebruikers maken patronen en publiceren ze direct; admins zien wie wat publiceerde en kunnen live patronen intrekken of IP's blokkeren. |
+| **kubusd** | Raspberry Pi Zero W v1.1 (armv6, headless) | Daemon driving the 9 PWM channels (3 strips × RGB) + 5 on/off sign outputs via pigpio. Receives patterns over MQTT, animates autonomously when offline. |
+| **console** | your server (Docker) | Flask web app: users create patterns and publish them immediately; admins see who published what and can revoke live patterns or block IPs. |
 
-Patronen = ingebouwde primitives + parameters (regenboog, pulse, fade, chase,
-feestthema's, bord-sequenties). Via MQTT naar kubusd gestuurd, payload
-versleuteld (AEAD + replay-teller), broker is configureerbaar (v1 = publieke
-broker).
+Patterns are built-in primitives + parameters (rainbow, pulse, fade, chase,
+holiday themes, sign sequences). They are pushed to kubusd over MQTT with
+AEAD-encrypted payloads; the broker is configurable (v1 uses a public broker).
 
-## Structuur
+## Layout
 
 ```
-kubusd/     de Pi-daemon (headless)
-console/    de Flask-webapp
-shared/     crypto + message schema (door beide gebruikt)
-deploy/     systemd unit + install.sh voor de Pi
+kubusd/     the Pi daemon (headless)
+console/    the Flask web app
+shared/     crypto + message schema (used by both)
+deploy/     systemd unit + install.sh for the Pi
 tests/      unit tests
-SPEC.md     het ontwerp (grill + review 2026-11-26)
+SPEC.md     the design (grill + review 2026-11-26)
 ```
 
-## Vereisten
+## Requirements
 
-- Python ≥ 3.11 (Pi: Raspberry Pi OS, `pip install paho-mqtt pynacl pigpio`)
-- pigpio daemon draait op de Pi host (`sudo systemctl enable --now pigpiod`)
-- Docker + compose (alleen voor dev + console)
-- GitHub release om de Pi te installeren (`deploy/install.sh`)
+- Python >= 3.11 (Pi: Raspberry Pi OS, `pip install paho-mqtt pynacl pigpio`)
+- pigpio daemon running on the Pi host (`sudo systemctl enable --now pigpiod`)
+- Docker + compose (dev and console only)
+- A GitHub release to install the Pi (`deploy/install.sh`)
 
-## Snel starten (dev, simulator)
+## Quick start (dev, simulator)
 
-kubusd heeft een simulatiemodus: geen hardware, ANSI-render van strips + bord.
+kubusd has a simulator mode: no hardware, ANSI render of strips + sign.
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
-cp kubusd/.env.example .env          # vul MQTT_BROKER + PAYLOAD_KEY in
-.venv/bin/python -m kubusd sim       # of: kubusd run (echte pigpio)
+cp kubusd/.env.example .env          # fill in MQTT_BROKER + PAYLOAD_KEY
+.venv/bin/python -m kubusd sim       # or: kubusd run (real pigpio)
 ```
 
-Console lokaal:
+Console locally:
 
 ```bash
 cp console/.env.example console/.env
 .venv/bin/python -m console          # http://localhost:5001
 ```
 
-Of met Docker: `docker compose up --build`.
+Or with Docker: `docker compose up --build`.
 
-## Installeren op de Pi
+## Install on the Pi
 
 ```bash
-curl -fsSL https://github.com/stevanov/lichtfabriek/releases/download/<tag>/install.sh | bash
+curl -fsSL https://github.com/stevanov/lichtfabriek/releases/download/<tag>/install.sh | KUBUSD_VERSION=<tag> bash
 ```
 
-Zie `deploy/install.sh` en `deploy/kubusd.service`. Versies: `RELEASING.md`.
-Werken met anderen: `AGENTS.md`.
+See `deploy/install.sh` and `deploy/kubusd.service`. Versions: `RELEASING.md`.
+Working with others: `AGENTS.md`.

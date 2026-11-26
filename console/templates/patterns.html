@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Patterns — Lichtfabriek{% endblock %}
+{% block content %}
+<div class="panel">
+  <div style="display:flex;align-items:center;justify-content:space-between;">
+    <h1>Patterns</h1>
+    <a class="btn" href="{{ url_for('new_pattern') }}">+ New pattern</a>
+  </div>
+  {% if patterns %}
+  <table>
+    <tr><th>Title</th><th>Primitive</th><th>Creator</th><th>Created</th><th>Status</th><th></th></tr>
+    {% for p in patterns %}
+    <tr>
+      <td>{{ p.title }}</td>
+      <td>{{ p.primitive }}</td>
+      <td>{{ p.creator }}</td>
+      <td class="muted">{{ p.created_ts | int | ctime }}</td>
+      <td>{% if p.active %}<strong>active</strong>{% else %}—{% endif %}</td>
+      <td>
+        <form method="post" action="{{ url_for('activate', pattern_id=p.pattern_id) }}" style="display:inline">
+          <button type="submit" {% if p.active %}disabled{% endif %}>Activate</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No patterns yet — create one.</p>
+  {% endif %}
+  <form method="post" action="{{ url_for('revoke') }}" style="margin-top:16px">
+    <button type="submit" class="secondary">Revoke all (default show)</button>
+  </form>
+</div>
+{% endblock %}

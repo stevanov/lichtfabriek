@@ -14,9 +14,9 @@ On a Pi Zero W v1.1, run a headless daemon (`kubusd`) that drives 3 PWM RGB stri
 - deployment dev + console: Docker (docker compose). console is the only web app; it runs on Steven's server.
 - versioning: `v26.11_38.0` = `v<year>.<month>_<minor>.<bugfix>` generated via `git describe`. one version line for both services. regex: `^v\d{2}\.\d{2}_\d+\.\d+$`. git describe appends `-<n>-g<sha>` between tags; release tarballs/images carry a baked `VERSION` file (no `.git` on target).
 - repo: monorepo, two services (`pi/` + `console/`), git flow: feature → devel → master, `--no-ff`. releases tagged on master.
-- animation model: built-in primitives + params over MQTT. Pi ships primitives (rainbow, pulse, fade, chase, holiday themes, sign sequences); messages name primitive + params (colors, speed, intensity). no raw frame data in v1.
+- animation model: built-in primitives + params over MQTT. Pi ships primitives (rainbow, pulse, fade, chase, holiday themes); messages name primitive + params (colors, speed, intensity). no raw frame data in v1. the sign is NOT a user primitive — it runs the fixed hammer animation (SPEC §C).
 - offline: persist last-good pattern in SQLite; on first boot run built-in default show; MQTT best-effort (subscribe when broker reachable, keep animating when not). survives reboot.
-- sign: fixed always-on animation of the 5 outputs, 24/7, plus time-based scheduler (on/off times) AND manual MQTT on/off override. schedule configurable via .env AND via MQTT (runtime override wins). (scheduler restrict-user-publishing idea NOT in v1.)
+- sign: fixed always-on animation of the 5 outputs, 24/7. EXACT SEQUENCE TBD (Steven, from memory 2026-11-26): the physical Stadsfabriek sign is a hammer that falls in ~3 steps onto an always-on anvil, then sparks fly — 5 outputs ≈ anvil=always on, 3× hammer steps, sparks, cycle step1→step2→step3→sparks→reset. Implemented as configurable constants in `kubusd/scheduler.py` (default period ~8 s) until the real sign's wiring/behavior is confirmed on site. plus time-based scheduler (on/off times) AND manual MQTT on/off override. schedule configurable via .env AND via MQTT (runtime override wins). users cannot program sign sequences (scheduler restrict idea, NOT in v1).
 - config Pi: `.env` = static config (MQTT broker URL + creds, shared payload key, GPIO pin map, host paths). SQLite = runtime state (last pattern, schedule overrides, audit). `.env.example` documents keys. no hand-edited JSON.
 - MQTT broker: configurable via `.env`; v1 ships over a public broker. payload encryption only (shared secret key in .env), no TLS requirement in v1.
 - payload crypto (review 2026-11-26): AEAD only — ChaCha20-Poly1305 via PyNaCl (preferred; check armv6 wheel availability at build, fallback AES-GCM via `cryptography` if it builds on armv6). random nonce per message, topic bound as associated data, `key_id` field for key rotation. replay protection: monotonic counter + timestamp window; kubusd persists last-accepted counter and rejects lower.
@@ -35,9 +35,9 @@ On a Pi Zero W v1.1, run a headless daemon (`kubusd`) that drives 3 PWM RGB stri
 - naming: system = Lichtfabriek; Pi daemon = kubusd; web app = console.
 - ? which public broker exactly (e.g. HiveMQ public vs broker.emqx.io) — configurable, decide at install.
 - ? exact GPIO pin map for 9 PWM + 5 sign outputs — comes from the physical wiring, set in `.env`.
-- ? where the old Python 2.7 code lives — port behavior from it if Steven provides it (not found in /mnt/c/development).
+- ? where the old Python 2.7 code lives — port behavior from it if Steven provides it (not found in the local dev tree).
 - ? console hosting details (server IP/domain, GitHub URL) — TBD, config at install.
-- ? which primitives ship in v1 — proposal: rainbow, pulse, fade, chase, holiday themes, sign sequences; expandable list.
+- ? which primitives ship in v1 — proposal: rainbow, pulse, fade, chase, holiday themes; expandable list. sign = fixed hammer animation, not user-selectable.
 
 ## §I
 
@@ -73,6 +73,7 @@ V16: audit ring buffer (capped rows), rate-limited invalid logging; SQLite WAL +
 V17: kubusd health: pigpiod + MQTT reconnect/healthcheck, render-loop watchdog, `Restart=always` + `WatchdogSec` in unit.
 V18: sign clock: unsynced clock → defined default state; `TZ` in .env; override expiry; sign/schedule messages console-admin only.
 V19: privacy: posting IP + username never in MQTT payload; console DB only; kubusd logs pattern_id + pattern_hash.
+V20: no absolute/host-specific paths in the repo (no /home/, /mnt/c, /opt/..., /etc/..., /var/lib/...) — config defaults are relative (e.g. `./data/kubusd.db`), systemd unit is a template filled at install time, install prefix chosen by the installer, never hard-coded.
 
 ## §T
 
