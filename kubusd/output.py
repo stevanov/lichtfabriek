@@ -31,6 +31,8 @@ class PigpioOutput(BaseOutput):
 
         self.pins_pwm = pins_pwm
         self.pins_sign = pins_sign
+        self._host = host
+        self._port = port
         self.pi = pigpio.pi(host, port)
         if not self.pi.connected:
             raise ConnectionError(
@@ -46,16 +48,51 @@ class PigpioOutput(BaseOutput):
 
     def set_frame(self, frame) -> None:
         duty = [c * 255.0 for strip in frame.strips for c in strip]
+        if not self._ensure_connected():
+            return  # pigpiod down: skip silently, reconnect loop keeps trying
         for pin, d in zip(self.pins_pwm, duty):
             self.pi.set_PWM_dutycycle(pin, max(0, min(255, round(d))))
         for pin, on in zip(self.pins_sign, frame.sign):
             self.pi.write(pin, 1 if on else 0)
 
+    def _ensure_connected(self) -> bool:
+        """Reconnect to pigpiod if the daemon restarted (V17, review
+        2026-11-26: output used to stay dead forever after a pigpiod
+        restart). Re-initialises the pins on a fresh connection."""
+        import pigpio
+
+        if self.pi.connected:
+            return True
+        try:
+            self.pi.stop()
+        except Exception:
+            pass
+        try:
+            self.pi = pigpio.pi(self._host, self._port)
+            if not self.pi.connected:
+                return False
+            for p in self.pins_pwm:
+                self.pi.set_mode(p, pigpio.OUTPUT)
+                self.pi.set_PWM_frequency(p, PWM_FREQ)
+                self.pi.set_PWM_dutycycle(p, 0)
+            for p in self.pins_sign:
+                self.pi.set_mode(p, pigpio.OUTPUT)
+                self.pi.write(p, 0)
+            return True
+        except Exception:
+            return False
+
     def close(self) -> None:
         for p in self.pins_pwm:
-            self.pi.set_PWM_dutycycle(p, 0)
+            try:
+                self.pi.set_PWM_dutycycle(p, 0)
+            except Exception:
+                pass
         for p in self.pins_sign:
-            self.pi.write(p, 0)
+            try:
+                self.pi.write(p, 0)
+            except Exception:
+                pass
         self.pi.stop()
 
 

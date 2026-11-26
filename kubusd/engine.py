@@ -14,18 +14,35 @@ from __future__ import annotations
 import colorsys
 import logging
 import math
-import random
 import time
 
 from shared.schema import (
     LEGACY_STEP_DURATION,
     MAX_BRIGHTNESS,
-    MAX_STROBE_HZ,
+    MIN_STROBE_PERIOD,
     PRIMITIVES,
 )
 
 NUM_STRIPS = 3
 NUM_SIGN = 5
+
+
+class _LCG:
+    """Deterministic PRNG shared with the JS visualizer (V23 parity).
+
+    The JS mirror implements the same LCG (x = (x*9301+49297) % 233280), so
+    random/fire/sparkle/holiday render IDENTICALLY in the browser preview and
+    on the Pi (review 2026-11-26: the two sides used different RNGs and the
+    preview ignored params.seed)."""
+
+    __slots__ = ("x",)
+
+    def __init__(self, seed: int):
+        self.x = (int(seed) * 9301 + 49297) % 233280
+
+    def random(self) -> float:
+        self.x = (self.x * 9301 + 49297) % 233280
+        return self.x / 233280.0
 
 
 def _apply_brightness(color, brightness: float):
@@ -43,8 +60,8 @@ def _rate(speed: float, base: float) -> float:
 
 def _period(base: float, speed: float) -> float:
     """Effective period for strobe-like primitives = base ÷ speed multiplier,
-    clamped so the effective frequency stays < MAX_STROBE_HZ (V14)."""
-    return max(1.0 / MAX_STROBE_HZ, base / max(speed, 0.01))
+    clamped so the effective flash rate stays strictly < 3 Hz (V14)."""
+    return max(MIN_STROBE_PERIOD, base / max(speed, 0.01))
 
 
 def _t_strobed(t: float, base: float, speed: float) -> float:
@@ -126,10 +143,8 @@ def prim_chase(t: float, params: dict) -> list[float]:
 
 def prim_holiday(t: float, params: dict) -> list[float]:
     speed = params.get("speed", 1.0)
-    # phase uses t*0.5 -> effective cycle is 2x the base period
     ts = _shifted(t, params, 2.0 * _period(1.0, speed))
-    seed = params.get("seed", 0)
-    rnd = random.Random(seed)
+    rnd = _LCG(params.get("seed", 0))
     sparkle = 0.7 + 0.3 * rnd.random()
     phase = _t_strobed(ts * 0.5, 1.0, speed)
     warm = 0.5 + 0.5 * math.sin(phase * 2 * math.pi)
@@ -148,10 +163,9 @@ def prim_random(t: float, params: dict) -> list[float]:
     """Random color that changes at its own rate (no strobe clamp: color jumps,
     not flashing — V14 caps flashing only)."""
     speed = params.get("speed", 1.0)
-    seed = params.get("seed", 0)
     cycle = 0.5 / max(speed, 0.01)
     ts = t + (params.get("offset", 0.0) % 1.0) * cycle
-    rnd = random.Random(seed + int(ts / max(cycle, 0.01)))
+    rnd = _LCG(params.get("seed", 0) + int(ts / max(cycle, 0.01)))
     return _apply_brightness([rnd.random(), rnd.random(), rnd.random()],
                              params.get("brightness", 1.0))
 
@@ -159,10 +173,9 @@ def prim_random(t: float, params: dict) -> list[float]:
 def prim_fire(t: float, params: dict) -> list[float]:
     """Flickering warm fire: orange-red with fast random intensity variation."""
     speed = params.get("speed", 1.0)
-    seed = params.get("seed", 0)
     cycle = 0.3 / max(speed, 0.01)  # smooth flicker, not a flash: no clamp
     ts = t + (params.get("offset", 0.0) % 1.0) * cycle
-    rnd = random.Random(seed + int(ts / max(cycle, 0.01) * 10))
+    rnd = _LCG(params.get("seed", 0) + int(ts / max(cycle, 0.01) * 10))
     flicker = 0.6 + 0.4 * rnd.random()
     return _apply_brightness(
         [1.0 * flicker, 0.35 * flicker, 0.05 * flicker],
@@ -178,12 +191,11 @@ def prim_sparkle(t: float, params: dict) -> list[float]:
     """Multi-color twinkle: mostly dark, brief flashes, each flash a RANDOM
     color from the palette (or from params.colors when 2+ given)."""
     speed = params.get("speed", 1.0)
-    seed = params.get("seed", 0)
     cycle = _period(0.7, speed)  # flash-like: stays strobe-capped (V14)
     ts = t + (params.get("offset", 0.0) % 1.0) * cycle
     colors = params.get("colors")
     palette = colors if colors and len(colors) >= 2 else SPARKLE_PALETTE
-    rnd = random.Random(seed + int(ts / max(cycle, 0.01)))
+    rnd = _LCG(params.get("seed", 0) + int(ts / max(cycle, 0.01)))
     on = rnd.random() < 0.2
     base = _color01(palette[int(rnd.random() * len(palette)) % len(palette)])
     return _apply_brightness([c if on else 0.0 for c in base],

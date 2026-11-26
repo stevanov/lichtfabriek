@@ -33,8 +33,10 @@ ALL_TOPICS = {
     TOPIC_SIGN_SCHEDULE,
 }
 
-# Safety caps (V14)
+# Safety caps (V14). The strobe floor is 0.35 s (~2.86 Hz): STRICTLY below the
+# 3 Hz cap (review 2026-11-26: 1/3 s produced exactly 3.0 Hz, not <3 Hz).
 MAX_STROBE_HZ = 3.0
+MIN_STROBE_PERIOD = 0.35
 MAX_BRIGHTNESS = 1.0
 MAX_MESSAGE_BYTES = 8192  # sequences grow the payload (alpha2)
 MAX_COLORS = 64
