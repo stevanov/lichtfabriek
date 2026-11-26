@@ -21,16 +21,16 @@ from __future__ import annotations
 
 import re
 
-# MQTT topics (SPEC §I)
+# MQTT topics (SPEC §I). `lichtfabriek/control` was removed 2026-11-26:
+# its commands (status/reset/reboot) were never implemented and audited
+# as no-ops (review finding).
 TOPIC_PATTERN_SET = "lichtfabriek/pattern/set"
 TOPIC_SIGN_SET = "lichtfabriek/sign/set"
 TOPIC_SIGN_SCHEDULE = "lichtfabriek/sign/schedule"
-TOPIC_CONTROL = "lichtfabriek/control"
 ALL_TOPICS = {
     TOPIC_PATTERN_SET,
     TOPIC_SIGN_SET,
     TOPIC_SIGN_SCHEDULE,
-    TOPIC_CONTROL,
 }
 
 # Safety caps (V14)
@@ -227,12 +227,6 @@ def validate_sign_schedule(msg: dict) -> None:
         raise ValueError("schedule.enabled must be bool")
 
 
-def validate_control(msg: dict) -> None:
-    cmd = msg.get("cmd")
-    if cmd not in ("status", "reset", "reboot"):
-        raise ValueError(f"unknown control cmd {cmd!r}")
-
-
 def validate_for_topic(topic: str, msg: dict) -> None:
     """Dispatch validation by topic. Raises ValueError."""
     if topic == TOPIC_PATTERN_SET:
@@ -241,7 +235,5 @@ def validate_for_topic(topic: str, msg: dict) -> None:
         validate_sign_set(msg)
     elif topic == TOPIC_SIGN_SCHEDULE:
         validate_sign_schedule(msg)
-    elif topic == TOPIC_CONTROL:
-        validate_control(msg)
     else:
         raise ValueError(f"unknown topic {topic!r}")

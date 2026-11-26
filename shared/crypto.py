@@ -92,7 +92,8 @@ class Reject(Exception):
 def open_envelope(topic: str, envelope: bytes, secret: str,
                   keys: dict[str, str] | None = None,
                   last_counter: int = -1, now: float | None = None,
-                  max_clock_skew: float = MAX_CLOCK_SKEW) -> PayloadAuth:
+                  max_clock_skew: float = MAX_CLOCK_SKEW,
+                  check_timestamp: bool = True) -> PayloadAuth:
     """Authenticate + decrypt an envelope for a topic.
 
     Returns PayloadAuth(message, counter). keys: key_id -> secret, for
@@ -109,7 +110,12 @@ def open_envelope(topic: str, envelope: bytes, secret: str,
     if not (0 < kid_len <= 32):
         raise Reject("bad key_id length")
     off = 2
-    key_id = envelope[off:off + kid_len].decode()
+    try:
+        key_id = envelope[off:off + kid_len].decode()
+    except UnicodeDecodeError:
+        # review 2026-11-26: a hostile non-UTF-8 key_id must not escape the
+        # Reject path (it used to raise out of open_envelope entirely)
+        raise Reject("key_id not valid UTF-8")
     off += kid_len
     counter = int.from_bytes(envelope[off:off + 8], "big")
     off += 8
@@ -124,10 +130,13 @@ def open_envelope(topic: str, envelope: bytes, secret: str,
             key = derive_key(keys[key_id], key_id)
         except KeyError:
             raise Reject(f"unknown key_id {key_id!r}")
-    # replay + clock window (V13)
+    # replay + clock window (V13). The timestamp check can be skipped for
+    # RETAINED messages (queued while the Pi was offline — review 2026-11-26)
+    # and when the local clock looks unsynced (no RTC on the Pi, V18):
+    # the per-topic replay counter still orders those.
     if counter <= last_counter:
         raise Reject(f"replay: counter {counter} <= {last_counter}")
-    if abs(now - ts) > max_clock_skew:
+    if check_timestamp and abs(now - ts) > max_clock_skew:
         raise Reject(f"timestamp outside window: {ts} vs now {int(now)}")
     aad = AAD_TOPIC_KEY + topic.encode() + counter.to_bytes(8, "big")
     try:

@@ -65,10 +65,12 @@ def test_sign_schedule():
         schema.validate_sign_schedule({"schedule": {"start": "18-00"}})
 
 
-def test_control():
-    schema.validate_control({"cmd": "status"})
+def test_control_topic_removed():
+    """`lichtfabriek/control` was removed (review: its commands were silent
+    no-ops). It must no longer be a valid topic."""
+    assert "TOPIC_CONTROL" not in dir(schema)
     with pytest.raises(ValueError):
-        schema.validate_control({"cmd": "explode"})
+        schema.validate_for_topic("lichtfabriek/control", {"cmd": "status"})
 
 
 def test_dispatch_unknown_topic():
