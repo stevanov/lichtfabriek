@@ -207,15 +207,16 @@ function applyVisual(t) {
         document.getElementById('cube'+ci).style.background =
           `rgb(${Math.round(color[0]*255)},${Math.round(color[1]*255)},${Math.round(color[2]*255)})`;
       }
-      // sign: fixed hammer cycle (mirror scheduler.py)
+      // sign: fixed hammer loop (mirror scheduler.py, SPEC §C):
+      // raised → mid-swing → impact → impact+sparks → impact(no sparks) → loop
       const cyc = tIn % 8.0;
-      const lamp = id => document.getElementById(id).classList.toggle('on',
-        cyc>=0&&cyc<8); // anvil always on
-      lamp('sign-anvil'); document.getElementById('sign-anvil').classList.add('on');
-      document.getElementById('sign-s1').classList.toggle('on', cyc<1);
-      document.getElementById('sign-s2').classList.toggle('on', cyc>=1&&cyc<2);
-      document.getElementById('sign-s3').classList.toggle('on', cyc>=2&&cyc<4.5);
-      document.getElementById('sign-spark').classList.toggle('on', cyc>=3&&cyc<4.5);
+      const RAISE = 3.0, SWING = 1.0, IMPACT = 0.5, SPARK = 1.0;
+      const impStart = RAISE + SWING, sparkStart = impStart + IMPACT;
+      document.getElementById('sign-anvil').classList.add('on'); // always on
+      document.getElementById('sign-s1').classList.toggle('on', cyc < RAISE);
+      document.getElementById('sign-s2').classList.toggle('on', cyc >= RAISE && cyc < impStart);
+      document.getElementById('sign-s3').classList.toggle('on', cyc >= impStart);
+      document.getElementById('sign-spark').classList.toggle('on', cyc >= sparkStart && cyc < sparkStart + SPARK);
       break;
     }
     tt -= s.duration_s;
