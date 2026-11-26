@@ -37,7 +37,9 @@ feature/*  ──>  devel  ──no-ff──>  master  ──tag──>  release
    git checkout master && git merge --no-ff devel
    ```
 4. Tag: `git tag -a v26.11_38.0 -m "release v26.11_38.0"` then push tag.
-5. Create the release on GitHub (tarball + `install.sh` + checksums).
+5. Create the release on GitHub: tag `v26.11_38.0`, attach the artifacts
+   `install.sh` expects (exact names): `lichtfabriek-<tag>.tar.gz` +
+   `lichtfabriek-<tag>.sha256` (a `sha256sum` over the tarball).
 6. Announce in the makerspace channel.
 
 ## Rollback

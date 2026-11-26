@@ -11,6 +11,7 @@ set -euo pipefail
 PREFIX="${KUBUSD_PREFIX:-/opt/lichtfabriek}"
 RUN_USER="${KUBUSD_USER:-lichtfabriek}"
 RELEASE_BASE="${KUBUSD_BASE:-https://github.com/stevanov/lichtfabriek}"
+AUTH_TOKEN="${KUBUSD_TOKEN:?set KUBUSD_TOKEN (GitHub fine-grained token, read:repository only)}"
 SYSTEMD_DIR="${KUBUSD_SYSTEMD_DIR:-/etc/systemd/system}"
 VERSION="${KUBUSD_VERSION:?set KUBUSD_VERSION, e.g. v26.11_38.0}"
 TARBALL="lichtfabriek-${VERSION}.tar.gz"
@@ -19,9 +20,12 @@ SHAFILE="lichtfabriek-${VERSION}.sha256"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-echo "==> downloading release ${VERSION}"
-curl -fsSL -o "$TMP/$TARBALL" "$RELEASE_BASE/releases/download/$VERSION/$TARBALL"
-curl -fsSL -o "$TMP/$SHAFILE" "$RELEASE_BASE/releases/download/$VERSION/$SHAFILE"
+# private repo: every release download needs the token (curl -H auth header)
+echo "==> downloading release ${VERSION} (private repo, token auth)"
+curl -fsSL -H "Authorization: token ${AUTH_TOKEN}" \
+  -o "$TMP/$TARBALL" "$RELEASE_BASE/releases/download/$VERSION/$TARBALL"
+curl -fsSL -H "Authorization: token ${AUTH_TOKEN}" \
+  -o "$TMP/$SHAFILE" "$RELEASE_BASE/releases/download/$VERSION/$SHAFILE"
 
 echo "==> verifying sha256 (V10)"
 ( cd "$TMP" && sha256sum -c "$SHAFILE" )

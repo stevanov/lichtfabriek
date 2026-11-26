@@ -59,9 +59,26 @@ them blindly. See `AGENTS.md` for how to work in this repo.
 
 ## Install on the Pi
 
+The repo is **private**, so releases are downloaded with a GitHub token
+(fine-grained, `read:repository` only — create one under
+Settings → Applications in GitHub). Install `pigpio` first:
+
 ```bash
-curl -fsSL https://github.com/stevanov/lichtfabriek/releases/download/<tag>/install.sh | KUBUSD_VERSION=<tag> bash
+sudo apt install -y pigpio
 ```
 
-See `deploy/install.sh` and `deploy/kubusd.service`. Versions: `RELEASING.md`.
-Working with others: `AGENTS.md`.
+Then fetch and run the installer with the token and a release tag. Because the
+repo is private, you cannot pipe `curl | bash` without auth — instead clone the
+repo once with the token, or download `install.sh` from the GitHub web UI:
+
+```bash
+# from a clone (token grants read):
+git clone https://github.com/stevanov/lichtfabriek.git
+cd lichtfabriek
+KUBUSD_TOKEN=<token> KUBUSD_VERSION=<tag> ./deploy/install.sh
+```
+
+Release tags look like `v26.11_38.0` (see `RELEASING.md`). The installer pulls
+the release tarball + checksum from GitHub, verifies the SHA256 (V10), installs
+into `KUBUSD_PREFIX`, and creates/updates the `kubusd` systemd unit. Fill in
+the generated env file (`PAYLOAD_KEY` must match the console).

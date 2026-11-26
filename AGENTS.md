@@ -15,6 +15,9 @@ design lives in `SPEC.md`.
   (`python -m kubusd sim`), not pigpio. Hardware smoke = `python -m kubusd smoke`.
 - **Env, never hard-coded config**: all config via `.env` (`.env.example` is
   the contract). Keys/secrets never committed.
+- **The GitHub repo is private** — release downloads in `deploy/install.sh`
+  authenticate with a fine-grained `read:repository` token passed as
+  `KUBUSD_TOKEN`; never commit or echo the token.
 - **V20: no absolute/host paths in the repo.** No `/home/`, `/mnt/c`,
   `/opt/...`, `/etc/...`, `/var/lib/...` in committed code or config. Defaults
   are relative (`./data/...`); the systemd unit is a template
