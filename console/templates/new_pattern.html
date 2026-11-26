@@ -1,17 +1,35 @@
 {% extends "base.html" %}
 {% block title %}New pattern — Lichtfabriek{% endblock %}
 {% block content %}
-<div class="panel" style="max-width:760px;">
+<div class="panel" style="max-width:960px;">
   <h1>New pattern</h1>
   <p class="muted">A pattern is a sequence of steps. Each step runs for its
   duration, and each cube can use its own primitive. Cubes you don't set keep
   their previous step's look (first step = off). Publishing activates it on
   the cubes immediately.</p>
 
-  <div id="viz" class="viz">
-    <div class="viz-sign-block">
+  <div class="editor-layout">
+    <div class="editor-col">
+      <form method="post" id="pattern-form">
+        <label>Title</label>
+        <input name="title" placeholder="e.g. Sinterklaas 2026" required>
+        <label>Description</label>
+        <textarea name="description" rows="2" placeholder="What it looks like, when to use it"></textarea>
+        <input type="hidden" name="steps" id="steps-field" value="">
+
+        <div id="steps-editor"></div>
+        <button type="button" class="secondary" id="add-step">+ Add step</button>
+
+        <div style="margin-top:16px;">
+          <button type="submit" id="publish-btn">Publish</button>
+          <span class="muted" id="seq-status"></span>
+        </div>
+      </form>
+    </div>
+
+    <div class="rig-col">
       <div class="viz-board" title="LED sign board (SPEC §C)">
-        <svg class="hammer-svg" viewBox="0 0 380 530" role="img" aria-hidden="true">
+        <svg class="hammer-svg" viewBox="30 5 200 205" role="img" aria-hidden="true">
           <rect x="40" y="20" width="160" height="170" fill="#111"/>
           <path d="M70 128 L190 128 L190 140 L155 146 L165 172 L185 172 L185 182 L85 182 L85 172 L105 172 L115 146 L90 140 Z"
                 fill="none" stroke="#cfe8f5" stroke-width="1.5" stroke-linejoin="round"/>
@@ -34,29 +52,13 @@
         <span class="sign-lamp" id="sign-spark" title="sparks">✦</span>
         <span class="muted">sign</span>
       </div>
-    </div>
-    <div class="viz-cubes">
-      <div class="cube" id="cube2">cube 3</div>
-      <div class="cube" id="cube1">cube 2</div>
-      <div class="cube" id="cube0">cube 1</div>
+      <div class="viz-cubes">
+        <div class="cube" id="cube2">cube 3</div>
+        <div class="cube" id="cube1">cube 2</div>
+        <div class="cube" id="cube0">cube 1</div>
+      </div>
     </div>
   </div>
-
-  <form method="post" id="pattern-form">
-    <label>Title</label>
-    <input name="title" placeholder="e.g. Sinterklaas 2026" required>
-    <label>Description</label>
-    <textarea name="description" rows="2" placeholder="What it looks like, when to use it"></textarea>
-    <input type="hidden" name="steps" id="steps-field" value="">
-
-    <div id="steps-editor"></div>
-    <button type="button" class="secondary" id="add-step">+ Add step</button>
-
-    <div style="margin-top:16px;">
-      <button type="submit" id="publish-btn">Publish</button>
-      <span class="muted" id="seq-status"></span>
-    </div>
-  </form>
 </div>
 
 <script>
@@ -281,25 +283,28 @@ vizLoop();
 </script>
 
 <style>
-/* visualizer layout (docs/sign-layout.svg): sign/LED board on top,
-   cubes stacked vertically on the right */
-.viz { display:flex; gap:28px; align-items:flex-start; justify-content:center;
-       margin:16px 0; }
-.viz-sign-block { display:flex; flex-direction:column; align-items:center; gap:10px; }
+/* two-column editor: step editor left, physical rig (sign board + cube
+   stack) right — matches the real layout (docs/sign-layout.svg) */
+.editor-layout { display:flex; gap:32px; align-items:flex-start;
+                 margin-top:18px; }
+.editor-col { flex:1 1 auto; min-width:0; }
+.rig-col { flex:0 0 auto; display:flex; flex-direction:column;
+           align-items:center; gap:12px; }
 .viz-board { background:#000; border:1px solid var(--border); border-radius:10px;
-             padding:8px; }
-.hammer-svg { width:200px; height:auto; display:block; }
+             padding:6px; }
+.hammer-svg { width:120px; height:auto; display:block; }
 #hammer-g { transition: transform 0.05s linear; }
 #spark-g { transition: opacity 0.05s linear; }
-.viz-sign { display:flex; gap:8px; align-items:center; justify-content:center; }
-.sign-lamp { width:34px; height:34px; border-radius:50%; background:#222; color:#666;
-             display:flex; align-items:center; justify-content:center; font-size:14px;
+.viz-sign { display:flex; gap:6px; align-items:center; justify-content:center; }
+.sign-lamp { width:30px; height:30px; border-radius:50%; background:#222; color:#666;
+             display:flex; align-items:center; justify-content:center; font-size:13px;
              font-weight:700; }
 .sign-lamp.on { background:#ffdd66; color:#222; }
-.viz-cubes { display:flex; flex-direction:column; gap:10px; }
-.cube { width:130px; height:64px; border-radius:10px; background:#111;
+/* IBC tanks are literal cubes — equal sides (1 m³) */
+.viz-cubes { display:flex; flex-direction:column; gap:8px; }
+.cube { width:96px; height:96px; border-radius:8px; background:#111;
         color:#fff; display:flex; align-items:center; justify-content:center;
-        font-size:13px; border:1px solid var(--border);
+        font-size:12px; border:1px solid var(--border);
         transition: background 0.08s linear; }
 .step-card { border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px; }
 .step-head { display:flex; gap:10px; align-items:center; margin-bottom:8px; }
