@@ -42,3 +42,12 @@ class Config:
     def validate(self) -> None:
         if not self.payload_key:
             raise ValueError("PAYLOAD_KEY is required")
+        # Never run with placeholder secrets (privacy review 2026-11-26): a
+        # public repo ships usable defaults, so a careless deploy would have a
+        # forgeable session key / known admin password.
+        if self.secret_key in ("", "dev-insecure-change-me", "change-me"):
+            raise ValueError(
+                "SECRET_KEY must be set to a real random value (not a placeholder)")
+        if self.admin_password in ("", "admin", "change-me"):
+            raise ValueError(
+                "ADMIN_PASSWORD must be set to a real value (not a placeholder)")

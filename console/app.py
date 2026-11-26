@@ -100,7 +100,10 @@ def login():
             session["user"] = username
             session["is_admin"] = bool(u["is_admin"])
             db.audit(username, "login", "ok", _client_ip())
-            nxt = request.args.get("next") or url_for("patterns")
+            nxt = request.args.get("next") or ""
+            # open-redirect guard (privacy review 2026-11-26): local paths only
+            if not nxt.startswith("/") or nxt.startswith("//"):
+                nxt = url_for("patterns")
             if u["must_change_password"]:
                 return redirect(url_for("change_password"))
             return redirect(nxt)

@@ -33,3 +33,31 @@ def test_validate_rejects_overlap():
         assert False, "should raise"
     except ValueError:
         pass
+
+
+def test_validate_rejects_placeholder_secret():
+    from console.config import Config as ConsoleConfig
+
+    os.environ["PAYLOAD_KEY"] = "x"
+    os.environ["SECRET_KEY"] = "change-me"  # placeholder
+    os.environ["ADMIN_PASSWORD"] = "real-password"
+    cfg = ConsoleConfig()
+    try:
+        cfg.validate()
+        assert False, "placeholder SECRET_KEY should raise"
+    except ValueError:
+        pass
+
+
+def test_validate_rejects_placeholder_admin_password():
+    from console.config import Config as ConsoleConfig
+
+    os.environ["PAYLOAD_KEY"] = "x"
+    os.environ["SECRET_KEY"] = "real-secret-value"
+    os.environ["ADMIN_PASSWORD"] = "admin"  # placeholder
+    cfg = ConsoleConfig()
+    try:
+        cfg.validate()
+        assert False, "placeholder ADMIN_PASSWORD should raise"
+    except ValueError:
+        pass
