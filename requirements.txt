@@ -1,4 +1,9 @@
 # kubusd runtime deps (installed by deploy/install.sh on the Pi)
-paho-mqtt>=1.6
+# paho <2 pinned: the code uses the v1 client API (v2 changes the callback
+# signature — upgrade deliberately, not via a transitive bump)
+paho-mqtt>=1.6,<2
 pynacl>=1.5
 # pigpio is a system package on the Pi (apt install pigpio), not pip.
+# NOTE: shared/crypto.py has an AES-GCM fallback, but `cryptography` is NOT
+# installed on the Pi — PyNaCl is required, the fallback exists only for
+# environments that already ship cryptography.

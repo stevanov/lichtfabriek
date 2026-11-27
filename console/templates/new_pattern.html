@@ -1,34 +1,32 @@
 {% extends "base.html" %}
-{% block title %}New pattern — Lichtfabriek{% endblock %}
+{% block title %}{{ t('New pattern') }} — Lichtfabriek{% endblock %}
 {% block content %}
 <div class="panel" style="max-width:960px;">
-  <h1>New pattern</h1>
-  <p class="muted">A pattern is a sequence of steps. Each step runs for its
-  duration, and each cube can use its own primitive. Cubes you don't set keep
-  their previous step's look (first step = off). Publishing activates it on
-  the cubes immediately.</p>
+  <h1>{{ t('New pattern') }}</h1>
+  <p class="muted">{{ t("A pattern is a sequence of steps. Each step runs for its duration, and each cube can use its own primitive. Cubes you don't set keep their previous step's look (first step = off). Publishing activates it on the cubes immediately.") }}</p>
 
   <div class="editor-layout">
     <div class="editor-col">
       <form method="post" id="pattern-form">
-        <label>Title</label>
-        <input name="title" placeholder="e.g. Sinterklaas 2026" required>
-        <label>Description</label>
-        <textarea name="description" rows="2" placeholder="What it looks like, when to use it"></textarea>
+        <input type="hidden" name="_csrf" value="{{ session.get('csrf','') }}">
+        <label>{{ t('Title') }}</label>
+        <input name="title" placeholder="{{ t('e.g. Sinterklaas 2026') }}" required>
+        <label>{{ t('Description') }}</label>
+        <textarea name="description" rows="2" placeholder="{{ t('What it looks like, when to use it') }}"></textarea>
         <input type="hidden" name="steps" id="steps-field" value="">
 
         <div id="steps-editor"></div>
-        <button type="button" class="secondary" id="add-step">+ Add step</button>
+        <button type="button" class="secondary" id="add-step">{{ t('+ Add step') }}</button>
 
         <div style="margin-top:16px;">
-          <button type="submit" id="publish-btn">Publish</button>
+          <button type="submit" id="publish-btn">{{ t('Publish') }}</button>
           <span class="muted" id="seq-status"></span>
         </div>
       </form>
     </div>
 
     <div class="rig-col">
-      <div class="viz-board" title="LED sign board (SPEC §C)">
+      <div class="viz-board" title="{{ t('LED sign board (SPEC §C)') }}">
         <svg class="hammer-svg" viewBox="30 5 200 205" role="img" aria-hidden="true">
           <rect x="40" y="20" width="160" height="170" fill="#111"/>
           <path d="M70 128 L190 128 L190 140 L155 146 L165 172 L185 172 L185 182 L85 182 L85 172 L105 172 L115 146 L90 140 Z"
@@ -45,163 +43,55 @@
         </svg>
       </div>
       <div class="viz-sign">
-        <span class="sign-lamp" id="sign-anvil" title="anvil — always on">▲</span>
-        <span class="sign-lamp" id="sign-s1" title="hammer raised">1</span>
-        <span class="sign-lamp" id="sign-s2" title="hammer mid-swing">2</span>
-        <span class="sign-lamp" id="sign-s3" title="hammer impact">3</span>
-        <span class="sign-lamp" id="sign-spark" title="sparks">✦</span>
-        <span class="muted">sign</span>
+        <span class="sign-lamp" id="sign-anvil" title="{{ t('anvil — always on') }}">▲</span>
+        <span class="sign-lamp" id="sign-s1" title="{{ t('hammer raised') }}">1</span>
+        <span class="sign-lamp" id="sign-s2" title="{{ t('hammer mid-swing') }}">2</span>
+        <span class="sign-lamp" id="sign-s3" title="{{ t('hammer impact') }}">3</span>
+        <span class="sign-lamp" id="sign-spark" title="{{ t('sparks') }}">✦</span>
+        <span class="muted">{{ t('sign') }}</span>
       </div>
       <div class="viz-cubes">
-        <div class="cube" id="cube0">cube 1</div>
-        <div class="cube" id="cube1">cube 2</div>
-        <div class="cube" id="cube2">cube 3</div>
+        <div class="cube" id="cube0">{{ t('cube 1') }}</div>
+        <div class="cube" id="cube1">{{ t('cube 2') }}</div>
+        <div class="cube" id="cube2">{{ t('cube 3') }}</div>
       </div>
     </div>
   </div>
 </div>
 
 <div class="panel" style="max-width:960px; margin-top:16px;">
-  <h2>Primitive reference</h2>
-  <p class="muted">What each primitive does, and which controls apply.</p>
+  <h2>{{ t('Primitive reference') }}</h2>
+  <p class="muted">{{ t('What each primitive does, and which controls apply.') }}</p>
   <table class="prim-table">
-    <tr><th>primitive</th><th>what it does</th><th>color</th><th>brightness</th><th>speed</th></tr>
-    <tr><td><strong>static</strong></td><td>A single fixed color, stays on.</td><td class="y">yes</td><td class="y">yes</td><td class="n">—</td></tr>
-    <tr><td><strong>rainbow</strong></td><td>Continuously cycles through all hues (the classic rainbow).</td><td class="n">—</td><td class="y">yes</td><td class="y">yes</td></tr>
-    <tr><td><strong>pulse</strong></td><td>Breathing effect: steps through colors, each gently pulsing in intensity.</td><td class="n">built-in</td><td class="y">yes</td><td class="y">yes</td></tr>
-    <tr><td><strong>fade</strong></td><td>Smoothly fades from one color to the next and back.</td><td class="n">built-in</td><td class="y">yes</td><td class="y">yes</td></tr>
-    <tr><td><strong>chase</strong></td><td>Flashing chase effect (blinks on a single cube; sweeps in a sequence).</td><td class="y">yes</td><td class="y">yes</td><td class="y">yes</td></tr>
-    <tr><td><strong>holiday</strong></td><td>Warm festive glow that gently breathes (reddish-gold).</td><td class="n">built-in</td><td class="y">yes</td><td class="y">yes</td></tr>
-    <tr><td><strong>random</strong></td><td>Jumps to a new random color at a steady rate.</td><td class="n">—</td><td class="y">yes</td><td class="y">yes</td></tr>
-    <tr><td><strong>fire</strong></td><td>Flickering orange-red like a real flame.</td><td class="n">—</td><td class="y">yes</td><td class="y">yes</td></tr>
-    <tr><td><strong>sparkle</strong></td><td>Mostly dark, with brief flashes in random colors (twinkle).</td><td class="n">random</td><td class="y">yes</td><td class="y">yes</td></tr>
-    <tr><td><strong>huesweep</strong></td><td>Slow, smooth sweep through the color wheel.</td><td class="n">—</td><td class="y">yes</td><td class="y">yes</td></tr>
-    <tr><td><strong>sine</strong></td><td>Smooth oscillation between two colors (red ↔ blue by default).</td><td class="n">built-in</td><td class="y">yes</td><td class="y">yes</td></tr>
-    <tr><td><strong>strobe</strong></td><td>Hard on/off strobe of your chosen color (capped below 3&nbsp;Hz).</td><td class="y">yes</td><td class="y">yes</td><td class="y">yes</td></tr>
-    <tr><td><strong>police</strong></td><td>Alternating red ↔ blue, like an emergency light.</td><td class="n">built-in</td><td class="y">yes</td><td class="y">yes</td></tr>
-    <tr><td><strong>knight</strong></td><td>Knight-Rider style scanning light (blinks on one cube; with per-cube offsets it sweeps across the stack).</td><td class="y">yes</td><td class="y">yes</td><td class="y">yes</td></tr>
-    <tr><td><strong>off</strong></td><td>Turns the cube off (black).</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+    <tr><th>{{ t('primitive') }}</th><th>{{ t('what it does') }}</th><th>{{ t('color') }}</th><th>{{ t('brightness') }}</th><th>{{ t('speed') }}</th></tr>
+    <tr><td><strong>static</strong></td><td>{{ t('A single fixed color, stays on.') }}</td><td class="y">{{ t('yes') }}</td><td class="y">{{ t('yes') }}</td><td class="n">—</td></tr>
+    <tr><td><strong>rainbow</strong></td><td>{{ t('Continuously cycles through all hues (the classic rainbow).') }}</td><td class="n">—</td><td class="y">{{ t('yes') }}</td><td class="y">{{ t('yes') }}</td></tr>
+    <tr><td><strong>pulse</strong></td><td>{{ t('Breathing effect: steps through colors, each gently pulsing in intensity.') }}</td><td class="n">{{ t('built-in') }}</td><td class="y">{{ t('yes') }}</td><td class="y">{{ t('yes') }}</td></tr>
+    <tr><td><strong>fade</strong></td><td>{{ t('Smoothly fades from one color to the next and back.') }}</td><td class="n">{{ t('built-in') }}</td><td class="y">{{ t('yes') }}</td><td class="y">{{ t('yes') }}</td></tr>
+    <tr><td><strong>chase</strong></td><td>{{ t('Flashing chase effect (blinks on a single cube; sweeps in a sequence).') }}</td><td class="y">{{ t('yes') }}</td><td class="y">{{ t('yes') }}</td><td class="y">{{ t('yes') }}</td></tr>
+    <tr><td><strong>holiday</strong></td><td>{{ t('Warm festive glow that gently breathes (reddish-gold).') }}</td><td class="n">{{ t('built-in') }}</td><td class="y">{{ t('yes') }}</td><td class="y">{{ t('yes') }}</td></tr>
+    <tr><td><strong>random</strong></td><td>{{ t('Jumps to a new random color at a steady rate.') }}</td><td class="n">—</td><td class="y">{{ t('yes') }}</td><td class="y">{{ t('yes') }}</td></tr>
+    <tr><td><strong>fire</strong></td><td>{{ t('Flickering orange-red like a real flame.') }}</td><td class="n">—</td><td class="y">{{ t('yes') }}</td><td class="y">{{ t('yes') }}</td></tr>
+    <tr><td><strong>sparkle</strong></td><td>{{ t('Mostly dark, with brief flashes in random colors (twinkle).') }}</td><td class="n">{{ t('random') }}</td><td class="y">{{ t('yes') }}</td><td class="y">{{ t('yes') }}</td></tr>
+    <tr><td><strong>huesweep</strong></td><td>{{ t('Slow, smooth sweep through the color wheel.') }}</td><td class="n">—</td><td class="y">{{ t('yes') }}</td><td class="y">{{ t('yes') }}</td></tr>
+    <tr><td><strong>sine</strong></td><td>{{ t('Smooth oscillation between two colors (red ↔ blue by default).') }}</td><td class="n">{{ t('built-in') }}</td><td class="y">{{ t('yes') }}</td><td class="y">{{ t('yes') }}</td></tr>
+    <tr><td><strong>strobe</strong></td><td>{{ t('Hard on/off strobe of your chosen color (capped below 3 Hz).') }}</td><td class="y">{{ t('yes') }}</td><td class="y">{{ t('yes') }}</td><td class="y">{{ t('yes') }}</td></tr>
+    <tr><td><strong>police</strong></td><td>{{ t('Alternating red ↔ blue, like an emergency light.') }}</td><td class="n">{{ t('built-in') }}</td><td class="y">{{ t('yes') }}</td><td class="y">{{ t('yes') }}</td></tr>
+    <tr><td><strong>knight</strong></td><td>{{ t('Knight-Rider style scanning light (blinks on one cube; with per-cube offsets it sweeps across the stack).') }}</td><td class="y">{{ t('yes') }}</td><td class="y">{{ t('yes') }}</td><td class="y">{{ t('yes') }}</td></tr>
+    <tr><td><strong>off</strong></td><td>{{ t('Turns the cube off (black).') }}</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
   </table>
-  <p class="muted">• <strong>color</strong>: your chosen color (single-color primitives).
-  • <strong>brightness</strong> 0–1, <strong>speed</strong> 1&nbsp;=&nbsp;normal, 2&nbsp;=&nbsp;twice as fast, 0.5&nbsp;=&nbsp;half speed.
-  • <strong>offset</strong>: phase shift as a fraction of one animation cycle — 0&nbsp;=&nbsp;in sync; 0.5&nbsp;=&nbsp;half a cycle out of phase; stagger cubes (0 / 0.33 / 0.66) to make knight/chase/rainbow sweep across the stack.
-  • <strong>built-in</strong> = the primitive uses its own fixed palette.</p>
+  <p class="muted" style="white-space:pre-line">{{ t('• color: your chosen color (single-color primitives).\n  • brightness 0–1, speed 1 = normal, 2 = twice as fast, 0.5 = half speed.\n  • offset: phase shift as a fraction of one animation cycle — 0 = in sync; 0.5 = half a cycle out of phase; stagger cubes (0 / 0.33 / 0.66) to make knight/chase/rainbow sweep across the stack.\n  • built-in = the primitive uses its own fixed palette.') }}</p>
 </div>
 
+<script src="{{ url_for('static', filename='viz.js') }}"></script>
 <script>
 const PRIMITIVES = {{ primitives | tojson }};
 
-// ---- small color / time helpers (mirror kubusd/engine.py, V23) ----
-// `speed` is a uniform MULTIPLIER for every primitive: 1.0 = normal pace,
-// 2.0 = twice as fast, 0.5 = half speed (SPEC §C). Base rates/periods are
-// per-primitive constants, exactly as in engine.py.
-const MAX_STROBE_HZ_JS = 1 / 3.0;
-function rate(speed, base) { return base * Math.max(speed, 0.01); }
-function periodOf(base, speed) { return Math.max(MAX_STROBE_HZ_JS, base / Math.max(speed, 0.01)); }
-function strobeBase(t, base, speed) {
-  const period = periodOf(base, speed); // < 3 Hz cap (V14)
-  return (t % period) / period;
-}
-function hsv(h, s, v) {
-  h = ((h % 1) + 1) % 1;
-  const i = Math.floor(h * 6), f = h * 6 - i,
-        p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
-  return [[v,t,p],[q,v,p],[p,v,t],[p,q,v],[t,p,v],[v,p,q]][i % 6];
-}
-function bright(c, b) { return c.map(x => Math.min(1, Math.max(0, x * b))); }
-function c01(c) { return [c[0]/255, c[1]/255, c[2]/255]; }
-
-// ---- primitives: (t, params) -> [r,g,b] 0..1  (mirror of engine.py) ----
-// `speed` is a uniform multiplier; `offset` is a FRACTION of one animation
-// cycle (0..1) — 0.5 = half a cycle out of phase with another cube.
-const shift = (t, p, cycle) => t + (p.offset??0) * cycle;
-const PRIMS = {
-  rainbow: (t,p) => { const c=1/rate(p.speed??1,0.5); const [r,g,b]=hsv(shift(t,p,c)*rate(p.speed??1,0.5)%1,1,1); return bright([r,g,b], p.brightness??1); },
-  huesweep: (t,p) => { const c=1/rate(p.speed??1,0.2); const [r,g,b]=hsv(shift(t,p,c)*rate(p.speed??1,0.2)%1,1,1); return bright([r,g,b], p.brightness??1); },
-  pulse: (t,p) => {
-    const cols = p.colors||[[255,0,0],[0,255,0],[0,0,255]];
-    const per = periodOf(1.0, p.speed??1);
-    const ts = shift(t,p, cols.length*per);  // offset: full palette cycle
-    const col = cols[Math.floor(ts/Math.max(per,0.01)) % cols.length];
-    const ph = strobeBase(ts, 1.0, p.speed??1), amp = 0.5+0.5*Math.sin(ph*2*Math.PI);
-    return bright(c01(col).map(x=>x*amp), p.brightness??1);
-  },
-  fade: (t,p) => {
-    const cols = p.colors||[[255,0,0],[0,255,0],[0,0,255]];
-    const cyc = 0.5/Math.max(p.speed??1,0.01);   // smooth blend: no clamp
-    const ts = shift(t,p,cyc), ph=(ts%cyc)/cyc;
-    const n=cols.length;
-    const i=Math.floor(ph*n)%n, j=(i+1)%n, f=(ph*n)-i;
-    const a=c01(cols[i]), b=c01(cols[j]);
-    return bright([a[0]*(1-f)+b[0]*f, a[1]*(1-f)+b[1]*f, a[2]*(1-f)+b[2]*f], p.brightness??1);
-  },
-  chase: (t,p) => {
-    const cyc = periodOf(0.8,p.speed??1);
-    const on = strobeBase(shift(t,p,cyc),0.8,p.speed??1)<0.5;  // 1 blink/period (V14)
-    const c = c01((p.colors||[[255,255,255]])[0]);
-    return bright(c.map(x=>on?x:0), p.brightness??1);
-  },
-  holiday: (t,p) => {
-    const cyc = 2*periodOf(1.0, p.speed??1);
-    const ph = strobeBase(shift(t,p,cyc)*0.5, 1.0, p.speed??1), warm=0.5+0.5*Math.sin(ph*2*Math.PI);
-    return bright([warm, warm*0.9, warm*0.4], p.brightness??1);
-  },
-  random: (t,p) => {
-    const cyc = 0.5/Math.max(p.speed??1,0.01);   // no strobe clamp (color jumps)
-    const ts = t + ((p.offset??0)%1)*cyc;
-    const seed = Math.floor(ts/Math.max(cyc,0.01));
-    let x = (seed*9301+49297)%233280;
-    const r=()=>{ x=(x*9301+49297)%233280; return x/233280; };
-    return bright([r(),r(),r()], p.brightness??1);
-  },
-  fire: (t,p) => {
-    const cyc = 0.3/Math.max(p.speed??1,0.01);   // smooth flicker: no clamp
-    const ts = t + ((p.offset??0)%1)*cyc;
-    const seed = Math.floor(ts/Math.max(cyc,0.01)*10);
-    let x=(seed*9301+49297)%233280; const r=()=>{x=(x*9301+49297)%233280;return x/233280;};
-    const f=0.6+0.4*r();
-    return bright([f, f*0.35, f*0.05], p.brightness??1);
-  },
-  sparkle: (t,p) => {
-    const cyc = periodOf(0.7, p.speed??1);   // flash-like: strobe-capped
-    const ts = t + ((p.offset??0)%1)*cyc;
-    const seed = Math.floor(ts/Math.max(cyc,0.01));
-    let x=(seed*9301+49297)%233280; const r=()=>{x=(x*9301+49297)%233280;return x/233280;};
-    const pal = (p.colors && p.colors.length>=2) ? p.colors
-      : [[255,255,255],[255,0,0],[0,0,255],[255,255,0],[0,255,0]];
-    const on = r()<0.2;
-    const c = c01(pal[Math.floor(r()*pal.length)%pal.length]);
-    return bright(c.map(v=>on?v:0), p.brightness??1);
-  },
-  sine: (t,p) => {
-    const cols=p.colors||[[255,0,0],[0,0,255]];
-    const c=1/rate(p.speed??1,0.4);
-    const m=0.5+0.5*Math.sin(shift(t,p,c)*rate(p.speed??1,0.4)*2*Math.PI);
-    const a=c01(cols[0]), b=c01(cols[1]);
-    return bright([a[0]*(1-m)+b[0]*m, a[1]*(1-m)+b[1]*m, a[2]*(1-m)+b[2]*m], p.brightness??1);
-  },
-  strobe: (t,p) => {
-    const cyc = periodOf(1.0, p.speed??1);
-    const on = strobeBase(shift(t,p,cyc), 1.0, p.speed??1)<0.5;
-    const c = c01((p.colors||[[255,255,255]])[0]);
-    return bright(c.map(x=>on?x:0), p.brightness??1);
-  },
-  police: (t,p) => {
-    const cols=p.colors||[[255,0,0],[0,0,255]];
-    const c = cols[Math.floor(strobeBase(shift(t,p,periodOf(0.6,p.speed??1)),0.6,p.speed??1)*2)%cols.length];
-    return bright(c01(c), p.brightness??1);
-  },
-  knight: (t,p) => {
-    const on = strobeBase(shift(t,p,periodOf(0.8,p.speed??1)),0.8,p.speed??1)<0.25;
-    const c = c01((p.colors||[[255,255,255]])[0]);
-    return bright(c.map(x=>on?x:0), p.brightness??1);
-  },
-  static: (t,p) => bright(c01((p.colors||[[255,255,255]])[0]), p.brightness??0.5),
-  off: () => [0,0,0],
-};
-
 // ---- step model in the editor ----
 let steps = [{ duration_s: 5, cubes: {0:{primitive:'rainbow',params:{}},1:null,2:null} }];
+
+// i18n (alpha4): server-rendered translations for the editor strings
+const T = {{ tjs | tojson }};
 
 // primitives that use exactly ONE color -> the color picker is meaningful.
 // multi-color (sparkle/pulse/fade/sine/police) and hue-based/fixed (rainbow,
@@ -224,25 +114,25 @@ function cubeInputs(idx) {
     const useColor = spec && ONE_COLOR.has(spec.primitive);
     const dis = spec ? '' : 'disabled';  // (keep) rows have nothing to tune
     rows += `<div class="cube-row" data-cube="${ci}">
-      <span class="cube-label">cube ${ci+1}</span>
+      <span class="cube-label">${T['cube '+(ci+1)]}</span>
       <select onchange="onPrim(${idx},${ci},this)">
-        <option value="">(keep)</option>
+        <option value="">${T['(keep)']}</option>
         ${PRIMITIVES.map(p=>`<option value="${p}" ${spec&&spec.primitive===p?'selected':''}>${p}</option>`).join('')}
       </select>
-      <span class="color-wrap" title="${useColor ? 'color (single-color primitive)' : 'color picker only for single-color primitives (static, strobe, chase, knight)'}">
+      <span class="color-wrap" title="${useColor ? T['color (single-color primitive)'] : T['color picker only for single-color primitives (static, strobe, chase, knight)']}">
         <input type="color" value="${hex}" ${useColor ? '' : 'disabled'} oninput="onColor(${idx},${ci},this)">
       </span>
-      <span class="slider-wrap" title="brightness: 0 = off, 1 = full">
+      <span class="slider-wrap" title="${T['brightness: 0 = off, 1 = full']}">
         <input type="range" min="0" max="1" step="0.05" value="${bright}" ${dis}
                oninput="onBright(${idx},${ci},this)">
         <output class="slider-val">${bright}</output>
       </span>
-      <span class="slider-wrap" title="speed: 0.1 = slow, 3 = fast">
+      <span class="slider-wrap" title="${T['speed: 0.1 = slow, 3 = fast']}">
         <input type="range" min="0.1" max="3" step="0.1" value="${speed}" ${dis}
                oninput="onSpeed(${idx},${ci},this)">
         <output class="slider-val">${speed}</output>
       </span>
-      <span class="slider-wrap" title="offset: phase shift as a fraction of one animation cycle (0 = in sync; 0.5 = half a cycle out of phase; stagger cubes e.g. 0 / 0.33 / 0.66 for a sweep)">
+      <span class="slider-wrap" title="${T['offset: phase shift as a fraction of one animation cycle (0 = in sync; 0.5 = half a cycle out of phase; stagger cubes e.g. 0 / 0.33 / 0.66 for a sweep)']}">
         <input type="range" min="0" max="1" step="0.01" value="${offset}" ${dis}
                oninput="onOffset(${idx},${ci},this)">
         <output class="slider-val">${offset}</output>
@@ -257,19 +147,19 @@ function renderEditor() {
   el.innerHTML = steps.map((s,i)=>`
     <div class="step-card">
       <div class="step-head">
-        <strong>Step ${i+1}</strong>
-        <label class="muted">duration (s)</label>
+        <strong>${T['Step {n}'].replace('{n}', i+1)}</strong>
+        <label class="muted">${T['duration (s)']}</label>
         <input type="number" step="0.5" min="0.5" value="${s.duration_s}" style="width:80px"
                oninput="onDur(${i},this)">
         <button type="button" class="secondary" onclick="rmStep(${i})">×</button>
       </div>
       <div class="cube-head">
-        <span class="cube-label">cube</span>
-        <span>primitive</span>
-        <span class="color-wrap">color</span>
-        <span class="slider-wrap">brightness</span>
-        <span class="slider-wrap">speed</span>
-        <span class="slider-wrap">offset</span>
+        <span class="cube-label">${T.cube}</span>
+        <span>${T.primitive}</span>
+        <span class="color-wrap">${T.color}</span>
+        <span class="slider-wrap">${T.brightness}</span>
+        <span class="slider-wrap">${T.speed}</span>
+        <span class="slider-wrap">${T.offset}</span>
       </div>
       ${cubeInputs(i)}
     </div>`).join('');
@@ -400,7 +290,7 @@ document.getElementById('pattern-form').onsubmit = () => {
   return true;
 };
 document.getElementById('seq-status').textContent =
-  `${PRIMITIVES.length} primitives available`;
+  `${PRIMITIVES.length} ${T['primitives available']}`;
 renderEditor();
 vizLoop();
 </script>

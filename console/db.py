@@ -76,14 +76,68 @@ class ConsoleDB:
             );
             """
         )
-        # migrations: older DBs lack pattern_hash / have primitive+params columns
+        # migrations (review 2026-11-26): older DBs lack pattern_hash; the
+        # alpha2 migration used to just ADD a steps column — but the leftover
+        # primitive/params NOT NULL columns then broke every new insert. Rebuild
+        # the table properly, converting legacy rows to canonical steps.
         cols = {r[1] for r in self.conn.execute("PRAGMA table_info(patterns)")}
-        if "pattern_hash" not in cols:
+        if cols and "steps" not in cols:
+            self._rebuild_patterns_table(cols)
+        elif cols and "pattern_hash" not in cols:
             self.conn.execute(
                 "ALTER TABLE patterns ADD COLUMN pattern_hash TEXT NOT NULL DEFAULT ''")
-        if "steps" not in cols and "primitive" in cols:
+        self.conn.commit()
+
+    def _rebuild_patterns_table(self, cols: set) -> None:
+        """Recreate `patterns` with the current schema, converting legacy
+        primitive/params rows into canonical steps. Transactional."""
+        import json
+
+        legacy = "primitive" in cols
+        select_cols = ["pattern_id", "title", "description", "creator",
+                       "created_ts", "posting_ip", "active"]
+        if "pattern_hash" in cols:
+            select_cols.insert(1, "pattern_hash")
+        if legacy:
+            select_cols[6:6] = ["primitive", "params"]
+        rows = self.conn.execute(
+            f"SELECT {', '.join(select_cols)} FROM patterns").fetchall()
+        self.conn.execute("ALTER TABLE patterns RENAME TO patterns_legacy")
+        self.conn.executescript(
+            """
+            CREATE TABLE patterns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pattern_id TEXT UNIQUE NOT NULL,
+                pattern_hash TEXT NOT NULL DEFAULT '',
+                title TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                creator TEXT NOT NULL,
+                created_ts REAL NOT NULL,
+                posting_ip TEXT NOT NULL,
+                steps TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 0
+            );
+            """
+        )
+        for row in rows:
+            d = dict(zip(select_cols, row))
+            if legacy:
+                # legacy single-primitive -> one all-cubes step (V22)
+                cube = {"primitive": d["primitive"],
+                        "params": json.loads(d.get("params") or "{}")}
+                steps = json.dumps([{"duration_s": 60.0,
+                                     "cubes": {"0": cube, "1": cube, "2": cube}}])
+            else:
+                steps = "[]"
             self.conn.execute(
-                "ALTER TABLE patterns ADD COLUMN steps TEXT NOT NULL DEFAULT '[]'")
+                "INSERT INTO patterns (pattern_id, pattern_hash, title, "
+                "description, creator, created_ts, posting_ip, steps, active) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
+                (d["pattern_id"], d.get("pattern_hash", ""), d["title"],
+                 d["description"], d["creator"], d["created_ts"],
+                 d["posting_ip"], steps, d["active"]),
+            )
+        self.conn.execute("DROP TABLE patterns_legacy")
         self.conn.commit()
 
     # ---- users (V11: admin-created only) ----
@@ -203,8 +257,8 @@ class ConsoleDB:
     def rate_limit_hits(self, ip: str, minute: int) -> int:
         with self._lock:
             row = self.conn.execute(
-                "SELECT COUNT(*) AS c FROM audit WHERE ip=? AND action='publish' "
-                "AND ts > ?",
+                "SELECT COUNT(*) AS c FROM audit WHERE ip=? AND action IN "
+                "('publish','activate','revoke','login') AND ts > ?",
                 (ip, minute),
             ).fetchone()
         return row["c"]

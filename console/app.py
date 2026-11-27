@@ -11,6 +11,7 @@ from flask import (
     Flask, abort, flash, g, redirect, render_template, request, session, url_for,
 )
 
+from console import i18n
 from console.config import Config
 from console.db import ConsoleDB
 from console.publisher import Publisher
@@ -21,6 +22,11 @@ app = Flask(__name__)
 cfg = Config(dotenv=Path(__file__).parent / ".env")
 cfg.validate()
 app.secret_key = cfg.secret_key
+# cookie hardening (review 2026-11-26): SameSite=Lax blocks cross-site POSTs
+# carrying the session cookie; HttpOnly is Flask's default
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+# i18n (alpha4): lightweight dict catalog, EN default (SPEC §C — console only)
+app.jinja_env.globals["t"] = i18n.t
 
 db = ConsoleDB(cfg.sqlite_path)
 publisher = Publisher(cfg, db)
@@ -31,6 +37,21 @@ def ctime_filter(ts: float) -> str:
     import time as _time
 
     return _time.strftime("%Y-%m-%d %H:%M", _time.localtime(ts))
+
+
+@app.before_request
+def _csrf_protect():
+    """CSRF (review 2026-11-26): every POST must carry the session-bound
+    token. No new dependency — the token lives in the signed session and is
+    rendered into every form as a hidden input."""
+    if request.method == "POST":
+        token = session.get("csrf")
+        if not token or request.form.get("_csrf") != token:
+            app.logger.warning("CSRF reject %s %s from %s",
+                               request.method, request.path, request.remote_addr)
+            abort(400)
+    else:
+        session.setdefault("csrf", secrets.token_hex(16))
 
 
 try:
@@ -49,10 +70,24 @@ def _bootstrap_admin() -> None:
 
 
 def _client_ip() -> str:
-    # V7: only trust X-Forwarded-For when explicitly configured behind a proxy
+    # V7: only trust X-Forwarded-For when explicitly configured behind a proxy.
+    # Use the LAST hop (the one our own proxy appended) — the first is
+    # client-controlled and spoofable (review 2026-11-26).
     if cfg.trust_proxy:
-        return request.headers.get("X-Forwarded-For", request.remote_addr).split(",")[0]
+        xff = request.headers.get("X-Forwarded-For", "")
+        if xff:
+            return xff.split(",")[-1].strip()
     return request.remote_addr or ""
+
+
+def _rate_limited(ip: str) -> bool:
+    """Shared mutation bucket: publish/activate/revoke/login (V7)."""
+    return db.rate_limit_hits(ip, time.time() - 60) >= cfg.rate_limit_per_minute
+
+
+def _must_change_password() -> bool:
+    u = db.get_user(session.get("user", ""))
+    return bool(u and u["must_change_password"])
 
 
 def login_required(f):
@@ -60,6 +95,12 @@ def login_required(f):
     def wrap(*args, **kwargs):
         if "user" not in session:
             return redirect(url_for("login", next=request.path))
+        # forced first-login change is a GUARD, not just a redirect
+        # (review 2026-11-26): /admin or publishing must not be reachable
+        # before the password is changed
+        if _must_change_password() and request.endpoint not in (
+                "change_password", "logout"):
+            return redirect(url_for("change_password"))
         return f(*args, **kwargs)
     return wrap
 
@@ -72,6 +113,8 @@ def admin_required(f):
         u = db.get_user(session["user"])
         if not u or not u["is_admin"] or u["banned"]:
             abort(403)
+        if u["must_change_password"] and request.endpoint != "change_password":
+            return redirect(url_for("change_password"))
         return f(*args, **kwargs)
     return wrap
 
@@ -93,6 +136,11 @@ def _banned_or_deleted(f):
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
+        ip = _client_ip()
+        if _rate_limited(ip):
+            # V7: login attempts share the mutation bucket (review 2026-11-26)
+            flash("Rate limit reached — try again in a minute.", "error")
+            return render_template("login.html")
         username = request.form.get("username", "")
         password = request.form.get("password", "")
         u = db.get_user(username)
@@ -117,6 +165,24 @@ def logout():
     db.audit(session.get("user", "?"), "logout", "", _client_ip())
     session.clear()
     return redirect(url_for("login"))
+
+
+@app.route("/lang", methods=["POST"])
+def set_lang():
+    """Switch UI language (alpha4). Choice lives in a cookie so it survives
+    logout/login; same-host referrer only (open-redirect guard)."""
+    from urllib.parse import urlparse
+
+    lang = request.form.get("lang", "")
+    nxt = request.referrer or url_for("patterns")
+    p = urlparse(nxt)
+    if p.netloc and p.netloc != request.host:
+        nxt = url_for("patterns")
+    resp = redirect(nxt)
+    if lang in i18n.LANGS:
+        resp.set_cookie(i18n.COOKIE, lang, max_age=365 * 24 * 3600,
+                        samesite="Lax")
+    return resp
 
 
 @app.route("/change-password", methods=["GET", "POST"])
@@ -158,7 +224,8 @@ def patterns():
 def new_pattern():
     if request.method == "POST":
         return _publish(request)
-    return render_template("new_pattern.html", primitives=sorted(schema.PRIMITIVES))
+    return render_template("new_pattern.html", primitives=sorted(schema.PRIMITIVES),
+                           tjs=i18n.js_strings())
 
 
 def _publish(request) -> redirect:
@@ -166,8 +233,7 @@ def _publish(request) -> redirect:
 
     ip = _client_ip()
     # rate limit publish endpoint (V7)
-    minute_start = time.time() - 60
-    if db.rate_limit_hits(ip, minute_start) >= cfg.rate_limit_per_minute:
+    if _rate_limited(ip):
         flash("Rate limit reached — try again in a minute.", "error")
         return redirect(url_for("patterns"))
     title = request.form.get("title", "").strip()
@@ -207,6 +273,10 @@ def _publish(request) -> redirect:
                    description, session["user"], ip, normalized["steps"])
     try:
         counter = publisher.publish_pattern(msg)
+    except ValueError as e:
+        # oversize message (V14 check moved to the publisher)
+        flash(str(e), "error")
+        return redirect(url_for("patterns"))
     except (ConnectionError, Exception) as e:  # noqa: BLE001
         db.audit(session["user"], "publish", f"failed: {e}", ip)
         flash(f"MQTT publish failed: {e}", "error")
@@ -226,6 +296,10 @@ def activate(pattern_id: str):
     if not p:
         abort(404)
     ip = _client_ip()
+    # activate publishes too -> same mutation bucket (V7, review 2026-11-26)
+    if _rate_limited(ip):
+        flash("Rate limit reached — try again in a minute.", "error")
+        return redirect(url_for("patterns"))
     msg = {
         "pattern_id": p["pattern_id"],
         "pattern_hash": p["pattern_hash"] or secrets.token_hex(8),
@@ -249,6 +323,10 @@ def activate(pattern_id: str):
 def revoke():
     # V15: revoke = publish default/previous pattern (off), retained
     ip = _client_ip()
+    # revoke publishes too -> same mutation bucket (V7, review 2026-11-26)
+    if _rate_limited(ip):
+        flash("Rate limit reached — try again in a minute.", "error")
+        return redirect(url_for("patterns"))
     msg = {"pattern_id": "default", "pattern_hash": "default",
            "primitive": "off", "params": {}}
     try:
@@ -259,7 +337,10 @@ def revoke():
         return redirect(url_for("patterns"))
     db.clear_active()
     db.audit(session["user"], "revoke", "all patterns off", ip)
-    flash("All patterns revoked (default show).", "ok")
+    # honest wording (review 2026-11-26): this turns the cubes DARK — the
+    # default show only runs at boot; it does not restart here
+    flash("All patterns off (cubes dark until a new pattern is published).",
+          "ok")
     return redirect(url_for("patterns"))
 
 

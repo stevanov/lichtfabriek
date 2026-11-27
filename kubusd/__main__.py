@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import argparse
 import logging
+import signal
 import sys
+import threading
 import time
 from pathlib import Path
+
+DEFAULT_SHOW = ("rainbow", {"speed": 1.0, "brightness": 0.6})
+PRUNE_INTERVAL = 60.0  # seconds between TTL sweeps (V15)
 
 
 def _setup_logging(level: str) -> None:
@@ -14,6 +19,16 @@ def _setup_logging(level: str) -> None:
         level=getattr(logging, level.upper(), logging.INFO),
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
+
+
+def _install_signal_handlers(stop: threading.Event) -> None:
+    """SIGTERM/SIGINT -> clean shutdown: output.close() zeroes the LEDs."""
+
+    def _sig(signum, frame):
+        stop.set()
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, _sig)
 
 
 def _is_off_steps(steps) -> bool:
@@ -26,6 +41,40 @@ def _is_off_steps(steps) -> bool:
             if spec and spec.get("primitive") != "off":
                 return False
     return True
+
+
+def _resume_or_default(db, engine, log) -> None:
+    """Resume last-good pattern (V3) or run the default show."""
+    active = db.get_active_pattern()
+    if active and not _is_off_steps(active.get("steps")):
+        engine.set_pattern(active["steps"])
+        log.info("resumed last-good pattern %s", active["pattern_id"])
+    else:
+        engine.set_pattern(*DEFAULT_SHOW)
+        log.info("default show (rainbow)")
+
+
+def _render_loop(db, engine, output, scheduler, cfg, stop: threading.Event,
+                 watchdog: bool) -> None:
+    """Shared render loop: render, ping the watchdog, sweep TTLs (V15)."""
+    from kubusd.notify import watchdog_ping
+
+    log = logging.getLogger("kubusd")
+    last_prune = 0.0
+    while not stop.is_set():
+        frame = engine.step()
+        frame.sign = scheduler.sign_frame()  # fixed hammer animation (SPEC §C)
+        output.set_frame(frame)
+        if watchdog:
+            watchdog_ping()
+        now = time.time()
+        if now - last_prune >= PRUNE_INTERVAL:
+            last_prune = now
+            if db.prune_expired(now):
+                # active pattern's TTL passed -> back to the default show
+                log.info("active pattern expired -> default show")
+                engine.set_pattern(*DEFAULT_SHOW)
+        stop.wait(1.0 / cfg.frame_rate)
 
 
 def _load_cfg(args) -> "Config":
@@ -47,36 +96,24 @@ def cmd_run(args) -> int:
 
     cfg = _load_cfg(args)
     _setup_logging(cfg.log_level)
+    log = logging.getLogger("kubusd")
+    stop = threading.Event()
+    _install_signal_handlers(stop)
     db = DB(cfg.sqlite_path)
     engine = Engine(cfg.frame_rate)
     output = make_output(cfg, simulator=False)
     mqtt = MQTTClient(cfg, db, engine, output)
     scheduler = SignScheduler(cfg, db, output)
     try:
-        # resume last-good pattern (V3) or default show
-        active = db.get_active_pattern()
-        db.prune_expired()
-        active = db.get_active_pattern()
-        if active and not _is_off_steps(active.get("steps")):
-            engine.set_pattern(active["steps"])
-            logging.getLogger("kubusd").info(
-                "resumed last-good pattern %s", active["pattern_id"])
-        else:
-            engine.set_pattern("rainbow", {"speed": 0.5, "brightness": 0.6})
-            logging.getLogger("kubusd").info("first boot: default show (rainbow)")
+        _resume_or_default(db, engine, log)
         engine.start()
         scheduler.start()
         mqtt.connect()
-        logging.getLogger("kubusd").info("kubusd running (frame_rate=%s)", cfg.frame_rate)
-        while True:
-            scheduler.tick()
-            frame = engine.step()
-            frame.sign = scheduler.sign_frame()  # fixed hammer animation (SPEC §C)
-            output.set_frame(frame)
-            time.sleep(1.0 / cfg.frame_rate)
-    except KeyboardInterrupt:
-        pass
+        log.info("kubusd running (frame_rate=%s)", cfg.frame_rate)
+        _render_loop(db, engine, output, scheduler, cfg, stop, watchdog=True)
     finally:
+        stop.set()
+        engine.stop()
         mqtt.stop()
         scheduler.stop()
         output.close()
@@ -94,31 +131,25 @@ def cmd_sim(args) -> int:
 
     cfg = _load_cfg(args)
     _setup_logging(cfg.log_level)
+    log = logging.getLogger("kubusd")
+    stop = threading.Event()
+    _install_signal_handlers(stop)
     db = DB(cfg.sqlite_path)
     engine = Engine(cfg.frame_rate)
     output = SimulatorOutput(cols=cfg.sim_cols)
     mqtt = MQTTClient(cfg, db, engine, output)
     scheduler = SignScheduler(cfg, db, output)
-    active = db.get_active_pattern()
-    if active and not _is_off_steps(active.get("steps")):
-        engine.set_pattern(active["steps"])
-    else:
-        engine.set_pattern("rainbow", {"speed": 0.5, "brightness": 0.6})
-    engine.start()
-    scheduler.start()
-    mqtt.connect()
-    logging.getLogger("kubusd").info(
-        "kubusd simulator — press Ctrl-C to stop (broker=%s)", cfg.mqtt_broker)
     try:
-        while True:
-            scheduler.tick()
-            frame = engine.step()
-            frame.sign = scheduler.sign_frame()  # fixed hammer animation (SPEC §C)
-            output.set_frame(frame)
-            time.sleep(1.0 / cfg.frame_rate)
-    except KeyboardInterrupt:
-        pass
+        _resume_or_default(db, engine, log)
+        engine.start()
+        scheduler.start()
+        mqtt.connect()
+        log.info(
+            "kubusd simulator — press Ctrl-C to stop (broker=%s)", cfg.mqtt_broker)
+        _render_loop(db, engine, output, scheduler, cfg, stop, watchdog=False)
     finally:
+        stop.set()
+        engine.stop()
         mqtt.stop()
         scheduler.stop()
         output.close()

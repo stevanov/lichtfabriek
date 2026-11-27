@@ -21,20 +21,22 @@ from __future__ import annotations
 
 import re
 
-# MQTT topics (SPEC §I)
+# MQTT topics (SPEC §I). `lichtfabriek/control` was removed 2026-11-26:
+# its commands (status/reset/reboot) were never implemented and audited
+# as no-ops (review finding).
 TOPIC_PATTERN_SET = "lichtfabriek/pattern/set"
 TOPIC_SIGN_SET = "lichtfabriek/sign/set"
 TOPIC_SIGN_SCHEDULE = "lichtfabriek/sign/schedule"
-TOPIC_CONTROL = "lichtfabriek/control"
 ALL_TOPICS = {
     TOPIC_PATTERN_SET,
     TOPIC_SIGN_SET,
     TOPIC_SIGN_SCHEDULE,
-    TOPIC_CONTROL,
 }
 
-# Safety caps (V14)
+# Safety caps (V14). The strobe floor is 0.35 s (~2.86 Hz): STRICTLY below the
+# 3 Hz cap (review 2026-11-26: 1/3 s produced exactly 3.0 Hz, not <3 Hz).
 MAX_STROBE_HZ = 3.0
+MIN_STROBE_PERIOD = 0.35
 MAX_BRIGHTNESS = 1.0
 MAX_MESSAGE_BYTES = 8192  # sequences grow the payload (alpha2)
 MAX_COLORS = 64
@@ -86,7 +88,37 @@ def _check_meta(meta: dict) -> None:
             raise ValueError(f"meta.{key} too long")
 
 
-def validate_params(params: dict) -> None:
+# per-primitive minimum `colors` arity (review 2026-11-26: a 1-color sine
+# used to raise IndexError at render time and crash-loop kubusd on resume)
+MIN_COLORS_FOR = {
+    "sine": 2,      # blends colors[0] and colors[1]
+}
+# primitives that read params.seed (must be an integer: a list/dict seed
+# raises TypeError inside random.Random)
+SEEDED_PRIMITIVES = {"holiday", "random", "fire", "sparkle"}
+MAX_SEED = 2**31 - 1
+
+
+def _validate_seed(primitive: str, params: dict) -> None:
+    seed = params.get("seed")
+    if seed is None:
+        return
+    if primitive in SEEDED_PRIMITIVES:
+        if not isinstance(seed, int) or isinstance(seed, bool):
+            raise ValueError(f"params.seed must be an integer for {primitive!r}")
+        if not (0 <= seed <= MAX_SEED):
+            raise ValueError(f"params.seed out of range [0,{MAX_SEED}]")
+
+
+def _validate_color_arity(primitive: str, colors: list) -> None:
+    minimum = MIN_COLORS_FOR.get(primitive, 1)
+    if len(colors) < minimum:
+        raise ValueError(
+            f"primitive {primitive!r} needs at least {minimum} color(s), "
+            f"got {len(colors)}")
+
+
+def validate_params(params: dict, primitive: str | None = None) -> None:
     """Validate primitive params + safety caps (V14). Raises ValueError."""
     if not isinstance(params, dict):
         raise ValueError("params must be an object")
@@ -107,6 +139,10 @@ def validate_params(params: dict) -> None:
                                and not isinstance(x, bool) and 0 <= x <= 255
                                for x in c)):
                 raise ValueError("each color must be [r,g,b] 0..255")
+    if primitive is not None:
+        if colors is not None:
+            _validate_color_arity(primitive, colors)
+        _validate_seed(primitive, params)
     brightness = params.get("brightness", 1.0)
     if not isinstance(brightness, (int, float)) or isinstance(brightness, bool):
         raise ValueError("params.brightness must be a number")
@@ -128,7 +164,7 @@ def _validate_cube_spec(cube_spec, cube_idx: int) -> None:
     primitive = cube_spec.get("primitive")
     if primitive not in PRIMITIVES:
         raise ValueError(f"cubes.{cube_idx}.primitive unknown {primitive!r}")
-    validate_params(cube_spec.get("params", {}))
+    validate_params(cube_spec.get("params", {}), primitive=primitive)
 
 
 def _validate_step(step: dict, idx: int) -> None:
@@ -191,7 +227,7 @@ def normalize_pattern(msg: dict) -> dict:
     if primitive not in PRIMITIVES:
         raise ValueError(f"unknown primitive {primitive!r}")
     params = msg.get("params", {})
-    validate_params(params)
+    validate_params(params, primitive=primitive)
     cube_spec = {"primitive": primitive, "params": params}
     return {
         "pattern_id": pattern_id,
@@ -227,12 +263,6 @@ def validate_sign_schedule(msg: dict) -> None:
         raise ValueError("schedule.enabled must be bool")
 
 
-def validate_control(msg: dict) -> None:
-    cmd = msg.get("cmd")
-    if cmd not in ("status", "reset", "reboot"):
-        raise ValueError(f"unknown control cmd {cmd!r}")
-
-
 def validate_for_topic(topic: str, msg: dict) -> None:
     """Dispatch validation by topic. Raises ValueError."""
     if topic == TOPIC_PATTERN_SET:
@@ -241,7 +271,5 @@ def validate_for_topic(topic: str, msg: dict) -> None:
         validate_sign_set(msg)
     elif topic == TOPIC_SIGN_SCHEDULE:
         validate_sign_schedule(msg)
-    elif topic == TOPIC_CONTROL:
-        validate_control(msg)
     else:
         raise ValueError(f"unknown topic {topic!r}")

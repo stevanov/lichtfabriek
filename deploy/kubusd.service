@@ -4,7 +4,10 @@ After=network.target pigpiod.service
 Wants=network-online.target
 
 [Service]
-Type=simple
+# Type=notify + WATCHDOG=1 pings from the render loop (kubusd/notify.py):
+# the watchdog supervises real render health (V17) — a wedged loop stops
+# pinging and systemd restarts us; a healthy loop is never killed.
+Type=notify
 User=__KUBUSD_USER__
 Group=__KUBUSD_USER__
 WorkingDirectory=__KUBUSD_INSTALL_DIR__

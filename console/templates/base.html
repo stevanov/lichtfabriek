@@ -51,13 +51,19 @@
   <header>
     <div class="brand">Licht<b>fabriek</b> Console</div>
     <nav>
+      {% set cur = request.cookies.get('lf_lang', 'en') %}
+      <form method="post" action="{{ url_for('set_lang') }}" style="display:inline;margin-right:6px;">
+        <input type="hidden" name="lang" value="{{ 'nl' if cur == 'en' else 'en' }}">
+        <input type="hidden" name="_csrf" value="{{ session.get('csrf','') }}">
+        <button type="submit" class="theme-btn" title="Switch language / Taal wisselen" aria-label="Switch language">{{ 'NL' if cur == 'en' else 'EN' }}</button>
+      </form>
       <button type="button" class="theme-btn" id="theme-btn" title="Toggle dark / light mode" aria-label="Toggle theme">◐</button>
       {% if session.user %}
-        <a href="{{ url_for('patterns') }}">Patterns</a>
-        <a href="{{ url_for('new_pattern') }}">New pattern</a>
+        <a href="{{ url_for('patterns') }}">{{ t('Patterns') }}</a>
+        <a href="{{ url_for('new_pattern') }}">{{ t('New pattern') }}</a>
         <span class="muted">{{ session.user }}</span>
-        {% if session.is_admin %}<a href="{{ url_for('admin') }}">Admin</a>{% endif %}
-        <a href="{{ url_for('logout') }}">Log out</a>
+        {% if session.is_admin %}<a href="{{ url_for('admin') }}">{{ t('Admin') }}</a>{% endif %}
+        <a href="{{ url_for('logout') }}">{{ t('Log out') }}</a>
       {% endif %}
     </nav>
   </header>

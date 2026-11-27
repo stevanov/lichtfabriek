@@ -1,34 +1,36 @@
 {% extends "base.html" %}
-{% block title %}Patterns — Lichtfabriek{% endblock %}
+{% block title %}{{ t('Patterns') }} — Lichtfabriek{% endblock %}
 {% block content %}
 <div class="panel">
   <div style="display:flex;align-items:center;justify-content:space-between;">
-    <h1>Patterns</h1>
-    <a class="btn" href="{{ url_for('new_pattern') }}">+ New pattern</a>
+    <h1>{{ t('Patterns') }}</h1>
+    <a class="btn" href="{{ url_for('new_pattern') }}">{{ t('+ New pattern') }}</a>
   </div>
   {% if patterns %}
   <table>
-    <tr><th>Title</th><th>Steps</th><th>Creator</th><th>Created</th><th>Status</th><th></th></tr>
+    <tr><th>{{ t('Title') }}</th><th>{{ t('Steps') }}</th><th>{{ t('Creator') }}</th><th>{{ t('Created') }}</th><th>{{ t('Status') }}</th><th></th></tr>
     {% for p in patterns %}
     <tr>
       <td>{{ p.title }}</td>
       <td>{{ p.steps | length }}{% if p.steps | length == 1 %} ({{ p.steps[0]['cubes'].get('0', {}).get('primitive', '—') if p.steps[0]['cubes'].get('0') else '—' }}){% endif %}</td>
       <td>{{ p.creator }}</td>
       <td class="muted">{{ p.created_ts | int | ctime }}</td>
-      <td>{% if p.active %}<strong>active</strong>{% else %}—{% endif %}</td>
+      <td>{% if p.active %}<strong>{{ t('active') }}</strong>{% else %}—{% endif %}</td>
       <td>
         <form method="post" action="{{ url_for('activate', pattern_id=p.pattern_id) }}" style="display:inline">
-          <button type="submit" {% if p.active %}disabled{% endif %}>Activate</button>
+          <input type="hidden" name="_csrf" value="{{ session.get('csrf','') }}">
+          <button type="submit" {% if p.active %}disabled{% endif %}>{{ t('Activate') }}</button>
         </form>
       </td>
     </tr>
     {% endfor %}
   </table>
   {% else %}
-  <p class="muted">No patterns yet — create one.</p>
+  <p class="muted">{{ t('No patterns yet — create one.') }}</p>
   {% endif %}
   <form method="post" action="{{ url_for('revoke') }}" style="margin-top:16px">
-    <button type="submit" class="secondary">Revoke all (default show)</button>
+    <input type="hidden" name="_csrf" value="{{ session.get('csrf','') }}">
+    <button type="submit" class="secondary">{{ t('Revoke all (default show)') }}</button>
   </form>
 </div>
 {% endblock %}

@@ -42,7 +42,21 @@ tar -xzf "$TMP/$TARBALL" -C "$PREFIX.new"
 [ -d "$PREFIX.prev" ] && rm -rf "$PREFIX.prev"
 [ -d "$PREFIX" ] && mv "$PREFIX" "$PREFIX.prev" || true
 mv "$PREFIX.new" "$PREFIX"
+# preserve state across upgrades (review 2026-11-26): kubusd.env (secrets) and
+# data/ (last-good pattern, counters, audit) live inside the old tree — carry
+# them into the new one, or an upgrade would restart with a blank key and no
+# last-good state.
+if [ -f "$PREFIX.prev/kubusd.env" ]; then
+  cp "$PREFIX.prev/kubusd.env" "$PREFIX/kubusd.env"
+  echo "==> carried over kubusd.env from the previous install"
+fi
+if [ -d "$PREFIX.prev/data" ]; then
+  rm -rf "$PREFIX/data"
+  cp -a "$PREFIX.prev/data" "$PREFIX/data"
+  echo "==> carried over data/ from the previous install"
+fi
 chown -R "$RUN_USER:$RUN_USER" "$PREFIX"
+[ -f "$PREFIX/kubusd.env" ] && chmod 600 "$PREFIX/kubusd.env"
 
 echo "==> venv + deps"
 python3 -m venv "$PREFIX/.venv"
@@ -53,6 +67,7 @@ ENV_FILE="$PREFIX/kubusd.env"
 if [ ! -f "$ENV_FILE" ]; then
   cp "$PREFIX/kubusd/.env.example" "$ENV_FILE"
   chown "$RUN_USER:$RUN_USER" "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
   echo "!!! fill in ${ENV_FILE} (PAYLOAD_KEY must match the console)"
 fi
 
@@ -64,6 +79,14 @@ sed -e "s|__KUBUSD_USER__|${RUN_USER}|g" \
     "$PREFIX/deploy/kubusd.service" > "${SYSTEMD_DIR}/kubusd.service"
 systemctl daemon-reload
 systemctl enable kubusd
+
+# never start with an unconfigured key (review 2026-11-26): the service would
+# crash-loop on its own PAYLOAD_KEY validation
+if ! grep -q '^PAYLOAD_KEY=..*' "$ENV_FILE"; then
+  echo "!!! PAYLOAD_KEY is empty in ${ENV_FILE} — kubusd NOT started."
+  echo "!!! Fill it in (must match the console), then: systemctl start kubusd"
+  exit 0
+fi
 systemctl restart kubusd
 echo "==> kubusd ${VERSION} installed. status:"
 systemctl status kubusd --no-pager || true

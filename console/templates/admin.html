@@ -1,30 +1,32 @@
 {% extends "base.html" %}
-{% block title %}Admin — Lichtfabriek{% endblock %}
+{% block title %}{{ t('Admin') }} — Lichtfabriek{% endblock %}
 {% block content %}
-<h1>Admin</h1>
+<h1>{{ t('Admin') }}</h1>
 
 <div class="panel">
-  <h2>Users</h2>
+  <h2>{{ t('Users') }}</h2>
   <table>
-    <tr><th>Username</th><th>Admin</th><th>Banned</th><th>Actions</th></tr>
+    <tr><th>{{ t('Username') }}</th><th>{{ t('Admin') }}</th><th>{{ t('Banned') }}</th><th>{{ t('Actions') }}</th></tr>
     {% for u in users %}
     <tr>
       <td>{{ u.username }}</td>
-      <td>{% if u.is_admin %}yes{% else %}no{% endif %}</td>
-      <td>{% if u.banned %}yes{% else %}no{% endif %}</td>
+      <td>{% if u.is_admin %}{{ t('yes') }}{% else %}{{ t('no') }}{% endif %}</td>
+      <td>{% if u.banned %}{{ t('yes') }}{% else %}{{ t('no') }}{% endif %}</td>
       <td>
         {% if u.username != 'admin' %}
           {% if u.banned %}
           <form method="post" action="{{ url_for('admin_users') }}" style="display:inline">
+            <input type="hidden" name="_csrf" value="{{ session.get('csrf','') }}">
             <input type="hidden" name="action" value="unban">
             <input type="hidden" name="username" value="{{ u.username }}">
-            <button type="submit" class="secondary">Unban</button>
+            <button type="submit" class="secondary">{{ t('Unban') }}</button>
           </form>
           {% else %}
           <form method="post" action="{{ url_for('admin_users') }}" style="display:inline">
+            <input type="hidden" name="_csrf" value="{{ session.get('csrf','') }}">
             <input type="hidden" name="action" value="ban">
             <input type="hidden" name="username" value="{{ u.username }}">
-            <button type="submit" class="secondary">Ban</button>
+            <button type="submit" class="secondary">{{ t('Ban') }}</button>
           </form>
           {% endif %}
         {% endif %}
@@ -32,48 +34,52 @@
     </tr>
     {% endfor %}
   </table>
-  <h3>Create user</h3>
+  <h3>{{ t('Create user') }}</h3>
   <form method="post" action="{{ url_for('admin_users') }}" style="max-width:420px">
+    <input type="hidden" name="_csrf" value="{{ session.get('csrf','') }}">
     <input type="hidden" name="action" value="create">
-    <input name="username" placeholder="Username" required>
-    <input name="password" type="password" placeholder="Password (>= 8 chars)" required>
+    <input name="username" placeholder="{{ t('Username') }}" required>
+    <input name="password" type="password" placeholder="{{ t('Password (>= 8 chars)') }}" required>
     <label style="display:flex;gap:8px;align-items:center;">
-      <input type="checkbox" name="is_admin" style="width:auto"> Admin
+      <input type="checkbox" name="is_admin" style="width:auto"> {{ t('Admin') }}
     </label>
-    <button type="submit">Create user</button>
+    <button type="submit">{{ t('Create user') }}</button>
   </form>
 </div>
 
 <div class="panel">
-  <h2>Sign control (admin only, V18)</h2>
+  <h2>{{ t('Sign control (admin only, V18)') }}</h2>
   <div class="row">
     <form method="post" action="{{ url_for('admin_sign') }}">
+      <input type="hidden" name="_csrf" value="{{ session.get('csrf','') }}">
       <input type="hidden" name="action" value="sign_on">
-      <button type="submit">Sign on</button>
+      <button type="submit">{{ t('Sign on') }}</button>
     </form>
     <form method="post" action="{{ url_for('admin_sign') }}">
+      <input type="hidden" name="_csrf" value="{{ session.get('csrf','') }}">
       <input type="hidden" name="action" value="sign_off">
-      <button type="submit" class="secondary">Sign off</button>
+      <button type="submit" class="secondary">{{ t('Sign off') }}</button>
     </form>
   </div>
-  <h3>Schedule</h3>
+  <h3>{{ t('Schedule') }}</h3>
   <form method="post" action="{{ url_for('admin_sign') }}" style="max-width:420px">
+    <input type="hidden" name="_csrf" value="{{ session.get('csrf','') }}">
     <input type="hidden" name="action" value="schedule">
     <div class="row">
-      <div><label>Start (HH:MM)</label><input name="start" value="18:00"></div>
-      <div><label>Stop (HH:MM)</label><input name="stop" value="23:00"></div>
+      <div><label>{{ t('Start (HH:MM)') }}</label><input name="start" value="18:00"></div>
+      <div><label>{{ t('Stop (HH:MM)') }}</label><input name="stop" value="23:00"></div>
     </div>
     <label style="display:flex;gap:8px;align-items:center;">
-      <input type="checkbox" name="enabled" checked style="width:auto"> Schedule enabled
+      <input type="checkbox" name="enabled" checked style="width:auto"> {{ t('Schedule enabled') }}
     </label>
-    <button type="submit">Publish schedule</button>
+    <button type="submit">{{ t('Publish schedule') }}</button>
   </form>
 </div>
 
 <div class="panel">
-  <h2>Audit log</h2>
+  <h2>{{ t('Audit log') }}</h2>
   <table>
-    <tr><th>Time</th><th>Actor</th><th>Action</th><th>Detail</th><th>IP</th></tr>
+    <tr><th>{{ t('Time') }}</th><th>{{ t('Actor') }}</th><th>{{ t('Action') }}</th><th>{{ t('Detail') }}</th><th>IP</th></tr>
     {% for a in audit %}
     <tr>
       <td class="muted">{{ a.ts | int | ctime }}</td>

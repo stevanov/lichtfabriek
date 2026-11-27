@@ -83,6 +83,8 @@ class SignScheduler:
         self.output = output
         self._running = False
         self._thread = None
+        self._state_cache: dict | None = None
+        self._state_ts = 0.0
 
     def start(self) -> None:
         self._running = True
@@ -96,16 +98,11 @@ class SignScheduler:
 
     def _loop(self) -> None:
         while self._running:
-            self.tick()
             time.sleep(1.0)
-
-    def tick(self) -> None:
-        self._last_state = self._state()
 
     def sign_enabled(self) -> bool:
         """Is the sign allowed to run right now? (schedule + override, V5/V18)."""
-        state = self._state()
-        return self._sign_on(state)
+        return self._sign_on(self._state())
 
     def sign_frame(self) -> list[bool]:
         """The current sign outputs (all off when the sign is disabled)."""
@@ -114,7 +111,14 @@ class SignScheduler:
         return sign_sequence()
 
     def _state(self) -> dict:
-        return self.db.get_sign_state()
+        # cached: the render loop runs at frame rate — a per-frame SQLite read
+        # would hammer the SD card (review 2026-11-26). 5 s staleness is fine:
+        # overrides/schedules take effect within one cache cycle.
+        now = time.time()
+        if self._state_cache is None or now - self._state_ts >= 5.0:
+            self._state_cache = self.db.get_sign_state()
+            self._state_ts = now
+        return self._state_cache
 
     def _sign_on(self, state: dict) -> bool:
         # manual override, with expiry (V18)
@@ -129,10 +133,7 @@ class SignScheduler:
             if time.time() - set_ts < OVERRIDE_TTL:
                 return False
         # schedule (V18): no synced clock -> defined default (on)
-        try:
-            sched = json.loads(state.get("sign_schedule", "{}"))
-        except (ValueError, TypeError):
-            sched = {}
+        sched = self._schedule(state)
         if sched.get("enabled", True):
             start, stop = sched.get("start", "18:00"), sched.get("stop", "23:00")
             now = datetime.now().strftime("%H:%M")
@@ -141,3 +142,17 @@ class SignScheduler:
                 return now >= start or now < stop
             return start <= now < stop
         return True
+
+    def _schedule(self, state: dict) -> dict:
+        """Effective schedule: DB (MQTT runtime override) wins; the .env
+        SIGN_SCHEDULE applies when nothing was stored yet (review 2026-11-26:
+        the env schedule used to be parsed but never read)."""
+        try:
+            stored = json.loads(state.get("sign_schedule", "{}"))
+        except (ValueError, TypeError):
+            stored = {}
+        if stored:
+            return stored
+        if self.cfg is not None:
+            return self.cfg.sign_schedule_effective or {}
+        return {}
