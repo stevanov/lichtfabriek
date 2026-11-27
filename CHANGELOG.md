@@ -3,7 +3,7 @@
 All notable changes to Lichtfabriek. Format: reverse chronological.
 Versions follow `RELEASING.md` (v26.11_0.0-alphaN → … → v26.11_0.0).
 
-## Unreleased (alpha4 hardening + i18n)
+## v26.11_0.0-alpha4 — 2026-11-27
 
 - **Full-codebase review fixes** (gemini-4-argon delta review ×6, Kimi K3.1
   Pro blind review ×21 real, Claude Sonnet 5.5 full sweep — cross-checked):
@@ -27,6 +27,8 @@ Versions follow `RELEASING.md` (v26.11_0.0-alphaN → … → v26.11_0.0).
     pigpio auto-reconnect; strobe floor strictly < 3 Hz; paho pinned <2.
 - **Dutch/English UI toggle** (alpha4 feature): lightweight dict catalog
   (`console/i18n.py`), EN default, cookie-persisted, console only.
+- fix: the NL/EN toggle button read the wrong store (session instead of the
+  `lf_lang` cookie) — the label now flips and the button toggles both ways.
 
 ## v26.11_0.0-alpha3 — 2026-11-26
 
